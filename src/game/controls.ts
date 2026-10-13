@@ -1,6 +1,6 @@
 import type { InputBindings } from '../engine/input/input';
 
-export const ACTIONS = ['left', 'right', 'down', 'jump', 'run', 'use', 'attack', 'cast', 'wings', 'hurt', 'mute', 'debug', 'help'] as const;
+export const ACTIONS = ['left', 'right', 'down', 'jump', 'run', 'use', 'attack', 'cast', 'wings', 'hurt', 'mute', 'music', 'debug', 'help'] as const;
 export type Action = (typeof ACTIONS)[number];
 
 export const BINDINGS: InputBindings<Action> = {
@@ -15,7 +15,8 @@ export const BINDINGS: InputBindings<Action> = {
     cast: ['KeyK', 'KeyX'],
     wings: ['KeyE', 'KeyC'],
     hurt: ['KeyH'],
-    mute: ['KeyM'],
+    mute: ['KeyM'], // all sound
+    music: ['KeyN'],
     debug: ['Backquote', 'F3'],
     help: ['Slash', 'F1'],
   },

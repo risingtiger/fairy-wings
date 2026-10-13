@@ -23,8 +23,10 @@ export interface HudState {
   /** Stars earned in the reading quest, out of `starGoal` (the number that earns her wings). */
   stars: number;
   starGoal: number;
-  /** Sound effects are off. */
+  /** All sound is off (effects and music). */
   muted: boolean;
+  /** The music alone is switched off. */
+  musicOff: boolean;
 }
 
 /**
@@ -36,7 +38,7 @@ export class Hud {
     status: 'loading', message: '', showHelp: false, showDebug: false,
     fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0,
     wingName: '', wingsWorn: false, flight: -1, toast: null,
-    stars: 0, starGoal: 0, muted: false,
+    stars: 0, starGoal: 0, muted: false, musicOff: false,
   };
   private scheduled = false;
   private toastTimer = 0;
@@ -88,7 +90,7 @@ export class Hud {
       ${s.toast ? keyed(s.toast.id, html`<div class="toast"><b>${s.toast.title}</b><span>${s.toast.body}</span></div>`) : nothing}
       ${s.wingName ? this.wingBadge(s) : nothing}
       ${this.starRow(s.stars, s.starGoal)}
-      <div class="corner-hint"><kbd>M</kbd> sounds ${s.muted ? 'off' : 'on'} · <kbd>\`</kbd> stats</div>
+      <div class="corner-hint"><kbd>M</kbd> sounds ${s.muted ? 'off' : 'on'} · <kbd>N</kbd> music ${s.muted || s.musicOff ? 'off' : 'on'} · <kbd>\`</kbd> stats</div>
     `;
   }
 
@@ -111,6 +113,8 @@ export class Hud {
         ${row(['U'], 'talk to the elf')}
         ${row(['J'], 'wave your wand · catch a hiding letter')}
         ${row(['E'], 'put wings on or away (once earned)')}
+        ${row(['M'], 'all sound on or off')}
+        ${row(['N'], 'music on or off')}
       </ul>
       <p class="muted">Talk to the elf to start. Each word's missing letter flies off and hides in the leaves: find it, catch it with your wand, and jump under the word to put it back. Every word earns a star, and ${s.starGoal} stars earn the Purple Wings.<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y talk, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
     </section>`;

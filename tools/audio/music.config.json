@@ -1,0 +1,75 @@
+{
+  "out": "assets/music",
+  "encode": { "codec": "libmp3lame", "bitrate": "112k", "sampleRate": 44100, "ext": "mp3" },
+  "loudness": { "lufs": -20, "truePeak": -1.5, "lra": 11 },
+  "fadeOut": 2.5,
+  "tracks": [
+    {
+      "id": "once-upon-a-time",
+      "title": "Once Upon a Time (loop)",
+      "author": "TAD",
+      "page": "https://opengameart.org/content/once-upon-a-time-loop",
+      "url": "https://opengameart.org/sites/default/files/once_upon_a_time_loop.wav",
+      "license": "CC0 1.0",
+      "repeat": 3,
+      "mood": "happy fantasy storybook theme: piano and orchestra"
+    },
+    {
+      "id": "trouble-in-the-garden",
+      "title": "Trouble in the Garden",
+      "author": "Augmentality (Brandon Morris)",
+      "page": "https://opengameart.org/content/trouble-in-the-garden",
+      "url": "https://opengameart.org/sites/default/files/trouble%20in%20the%20garden.ogg",
+      "license": "CC0 1.0 (dual-licensed OGA-BY 3.0)",
+      "repeat": 1,
+      "mood": "silly, sneaky, mischievous fantasy tune (the hint of danger)"
+    },
+    {
+      "id": "rpg-overworld",
+      "title": "RPG Overworld (from 2 Whimsical RPG Themes)",
+      "author": "Karate Studios",
+      "page": "https://opengameart.org/content/2-whimsical-rpg-themes",
+      "url": "https://opengameart.org/sites/default/files/RPG%20Overworld.flac",
+      "license": "CC0 1.0",
+      "repeat": 2,
+      "mood": "whimsical adventure: flute, ocarina and plucked strings"
+    },
+    {
+      "id": "snowfall",
+      "title": "Snowfall (looped version)",
+      "author": "Kistol",
+      "page": "https://opengameart.org/content/snowfall",
+      "url": "https://opengameart.org/sites/default/files/Snowfall%20%28Looped%20ver.%29_0.ogg",
+      "license": "CC0 1.0",
+      "repeat": 3,
+      "mood": "light, playful piano waltz"
+    },
+    {
+      "id": "childrens-march",
+      "title": "Children's March Theme",
+      "author": "Cleyton Kauffman",
+      "page": "https://opengameart.org/content/childrens-march-theme",
+      "url": "https://opengameart.org/sites/default/files/childrens_march_theme.zip",
+      "file": "Children's March Theme.wav",
+      "license": "CC0 1.0",
+      "repeat": 2,
+      "mood": "cheerful, cute march: flute, trombone and snare"
+    },
+    {
+      "id": "music-box",
+      "title": "Music Box: Cute Tune (from 4 Music Box Tracks)",
+      "author": "Aureolus_Omicron",
+      "page": "https://opengameart.org/content/4-music-box-tracks",
+      "url": "https://opengameart.org/sites/default/files/4_music_box_tracks_ogg.zip",
+      "file": "musicbox2_cute_tune.ogg",
+      "license": "CC0 1.0",
+      "repeat": 1,
+      "mood": "cute celesta music box"
+    }
+  ],
+  "_notes": {
+    "repeat": "most sources are short seamless loops (about a minute); repeating them inside the file gives each play two to three minutes without an MP3 gap at the seam",
+    "format": "MP3 plays in every browser (Safari included) and streams through an <audio> element",
+    "loudness": "two-pass EBU R128 loudnorm to the same integrated level, so the game sets the music level in one place"
+  }
+}

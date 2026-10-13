@@ -1,4 +1,5 @@
 import './hud/hud.css';
+import { MusicPlayer } from './engine/audio/music';
 import { GameLoop } from './engine/core/loop';
 import { autoResize, GpuUnsupportedError, initGpu } from './engine/gpu/device';
 import { MipmapGenerator } from './engine/gpu/mipmaps';
@@ -7,6 +8,7 @@ import { SpriteRenderer } from './engine/render/sprite-renderer';
 import { loadIntroAssets } from './game/assets';
 import { ACTIONS, BINDINGS } from './game/controls';
 import { IntroScene, SKY_TOP } from './game/intro-scene';
+import { MUSIC, MUSIC_MANIFEST } from './game/music';
 import { VoiceCues } from './game/voice-cues';
 import { createVoice } from './game/voiceovers';
 import { Hud } from './hud/hud';
@@ -20,6 +22,8 @@ async function main(): Promise<void> {
   const { device, context } = gpu;
   autoResize(canvas, device.limits.maxTextureDimension2D);
 
+  // music is a nice-to-have: if its playlist won't load, the game runs without it
+  const musicLoading = MusicPlayer.load(MUSIC_MANIFEST, MUSIC).catch((error: unknown) => { console.warn('No music:', error); return null; });
   const mips = new MipmapGenerator(device);
   const renderer = await SpriteRenderer.create(gpu);
   const scene = new IntroScene(await loadIntroAssets(device, mips, renderer), {
@@ -29,6 +33,16 @@ async function main(): Promise<void> {
   const cues = new VoiceCues(voice, scene);
   scene.sounds.muted = loadMuted();
   hud.update({ muted: scene.sounds.muted, starGoal: scene.quest.starGoal });
+  // M silences everything; N switches just the music
+  const music = await musicLoading;
+  let musicOff = loadMusicOff();
+  const applyMusic = () => {
+    if (music) music.muted = scene.sounds.muted || musicOff;
+    hud.update({ musicOff });
+  };
+  applyMusic();
+  music?.start(); // the browser holds it until the first key or tap
+  voice.onSpeakingChange((speaking) => music?.duck(speaking ? 0.6 : 0, speaking ? 0.3 : 0.8)); // music steps back while someone talks
   const input = new Input(window, ACTIONS, BINDINGS);
 
   const colorAttachment: GPURenderPassColorAttachment = { view: undefined as unknown as GPUTextureView, clearValue: SKY_TOP, loadOp: 'clear', storeOp: 'store' };
@@ -44,6 +58,12 @@ async function main(): Promise<void> {
         scene.sounds.muted = !scene.sounds.muted;
         hud.update({ muted: scene.sounds.muted });
         saveMuted(scene.sounds.muted);
+        applyMusic();
+      }
+      if (input.take('music', now, 250)) {
+        musicOff = !musicOff;
+        applyMusic();
+        saveMusicOff(musicOff);
       }
     },
     update(dt, now) {
@@ -77,7 +97,7 @@ async function main(): Promise<void> {
 
   hud.update({ status: 'ready' });
   loop.start();
-  if (import.meta.env.DEV) Object.assign(window, { game: { scene, renderer, loop, input, voice } }); // console debugging
+  if (import.meta.env.DEV) Object.assign(window, { game: { scene, renderer, loop, input, voice, music } }); // console debugging
 }
 
 // the sound switch is remembered per browser; storage can be unavailable (private windows), so it's best effort
@@ -87,6 +107,13 @@ function loadMuted(): boolean {
 }
 function saveMuted(muted: boolean): void {
   try { localStorage.setItem(MUTED_KEY, muted ? '1' : '0'); } catch { /* not remembered */ }
+}
+const MUSIC_OFF_KEY = 'sidescroller.musicOff';
+function loadMusicOff(): boolean {
+  try { return localStorage.getItem(MUSIC_OFF_KEY) === '1'; } catch { return false; }
+}
+function saveMusicOff(off: boolean): void {
+  try { localStorage.setItem(MUSIC_OFF_KEY, off ? '1' : '0'); } catch { /* not remembered */ }
 }
 
 main().catch((error: unknown) => {

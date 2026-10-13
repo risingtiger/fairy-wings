@@ -1,0 +1,40 @@
+{
+  "tracks": [
+    {
+      "file": "once-upon-a-time.mp3",
+      "title": "Once Upon a Time (loop)",
+      "author": "TAD",
+      "seconds": 173
+    },
+    {
+      "file": "trouble-in-the-garden.mp3",
+      "title": "Trouble in the Garden",
+      "author": "Augmentality (Brandon Morris)",
+      "seconds": 106
+    },
+    {
+      "file": "rpg-overworld.mp3",
+      "title": "RPG Overworld (from 2 Whimsical RPG Themes)",
+      "author": "Karate Studios",
+      "seconds": 117
+    },
+    {
+      "file": "snowfall.mp3",
+      "title": "Snowfall (looped version)",
+      "author": "Kistol",
+      "seconds": 149
+    },
+    {
+      "file": "childrens-march.mp3",
+      "title": "Children's March Theme",
+      "author": "Cleyton Kauffman",
+      "seconds": 128
+    },
+    {
+      "file": "music-box.mp3",
+      "title": "Music Box: Cute Tune (from 4 Music Box Tracks)",
+      "author": "Aureolus_Omicron",
+      "seconds": 137
+    }
+  ]
+}
