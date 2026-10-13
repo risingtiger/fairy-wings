@@ -1,0 +1,21 @@
+{
+  "jump": [
+    "jump-1.wav",
+    "jump-2.wav",
+    "jump-3.wav"
+  ],
+  "land": [
+    "land-1.wav",
+    "land-2.wav",
+    "land-3.wav",
+    "land-4.wav",
+    "land-5.wav"
+  ],
+  "step": [
+    "step-1.wav",
+    "step-2.wav",
+    "step-3.wav",
+    "step-4.wav",
+    "step-5.wav"
+  ]
+}

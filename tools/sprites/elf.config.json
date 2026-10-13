@@ -1,0 +1,42 @@
+{
+  "source": [
+    "elf exec-aa198707-481f-4171-9c97-4546e10bc901.png",
+    "elf exec-f515ab02-1961-4dc2-9fcb-9978d4397da3.png"
+  ],
+  "out": "assets/sprites/elf/elf",
+  "frames": [
+    "idle1", "idle2", "idle3", null, null, null,
+    "idle4", "idle5", "idle6", null, null, null
+  ],
+  "reference": "idle1",
+  "alphaFloor": 24,
+  "minFramePixels": 20000,
+  "rowTolerance": 120,
+  "headGuess": [34, 160],
+  "headBox": [-125, -130, 110, 50],
+  "scaleBoxes": {
+    "head": [-125, -130, 110, 50],
+    "face": [-45, -30, 80, 50],
+    "crown": [-125, -130, 110, -40]
+  },
+  "searchRadius": 18,
+  "scaleRange": [0.92, 1.12],
+  "minScaleConfidence": 0.6,
+  "scaleBy": "source",
+  "pivotX": "feet",
+  "feetBand": 30,
+  "padding": 6,
+  "layout": [
+    ["idle1", "idle2", "idle3"],
+    ["idle4", "idle5", "idle6"]
+  ],
+  "animations": {
+    "idle": { "frames": ["idle1", "idle2", "idle3", "idle4", "idle5", "idle6"], "loop": true }
+  },
+  "_notes": {
+    "source": "two sheets of the elf boy: top rows are idle poses, bottom rows walking (skipped for now)",
+    "headGuess": "his skin and cream hair are the same colour, so the head search starts from the top of the pose",
+    "scaleBy": "the second sheet is drawn ~4.5% bigger; each sheet is one size, so it gets one scale",
+    "pivotX": "idle poses shift his weight: the boots stay planted and the body sways"
+  }
+}

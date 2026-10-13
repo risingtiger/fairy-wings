@@ -1,0 +1,13 @@
+{
+  "source": "exec-840e2e38-d3ae-448c-bb16-caaa6829ee45.png",
+  "out": "assets/sprites/star/star",
+  "frames": ["idle", "happy", "curious", "float", "floatBack", "front", "twinkle", "dash", "cheer", "spin", "ouch", "sleep"],
+  "alphaFloor": 24,
+  "minFramePixels": 3000,
+  "rowTolerance": 120,
+  "attachRadius": 60,
+  "fringe": 3,
+  "pivot": { "mode": "color", "min": [240, 215, 190], "max": [255, 255, 240] },
+  "padding": 6,
+  "_notes": { "pivot": "centre of the star's cream body, so the body stays put while tails and sparkles change" }
+}

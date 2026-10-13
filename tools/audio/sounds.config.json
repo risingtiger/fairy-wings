@@ -1,0 +1,46 @@
+{
+  "out": "assets/sounds",
+  "peakDb": -1,
+  "packs": {
+    "impact": {
+      "title": "Impact Sounds",
+      "author": "Kenney",
+      "page": "https://kenney.nl/assets/impact-sounds",
+      "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+      "license": "CC0 1.0"
+    },
+    "rpg": {
+      "title": "RPG Audio",
+      "author": "Kenney",
+      "page": "https://kenney.nl/assets/rpg-audio",
+      "url": "https://kenney.nl/media/pages/assets/rpg-audio/8e99002d76-1677590336/kenney_rpg-audio.zip",
+      "license": "CC0 1.0"
+    }
+  },
+  "sounds": {
+    "jump": [
+      { "pack": "rpg", "file": "Audio/cloth1.ogg", "start": 0.06, "end": 0.3, "fade": 0.08 },
+      { "pack": "rpg", "file": "Audio/cloth2.ogg", "start": 0.06, "end": 0.34, "fade": 0.08 },
+      { "pack": "rpg", "file": "Audio/cloth3.ogg", "start": 0.03, "end": 0.26, "fade": 0.08 }
+    ],
+    "land": [
+      { "pack": "impact", "file": "Audio/impactSoft_medium_000.ogg", "fade": 0.02 },
+      { "pack": "impact", "file": "Audio/impactSoft_medium_001.ogg", "fade": 0.02 },
+      { "pack": "impact", "file": "Audio/impactSoft_medium_002.ogg", "fade": 0.02 },
+      { "pack": "impact", "file": "Audio/impactSoft_medium_003.ogg", "fade": 0.02 },
+      { "pack": "impact", "file": "Audio/impactSoft_medium_004.ogg", "fade": 0.02 }
+    ],
+    "step": [
+      { "pack": "impact", "file": "Audio/footstep_grass_000.ogg", "end": 0.2, "fade": 0.06 },
+      { "pack": "impact", "file": "Audio/footstep_grass_001.ogg", "end": 0.2, "fade": 0.06 },
+      { "pack": "impact", "file": "Audio/footstep_grass_002.ogg", "end": 0.2, "fade": 0.06 },
+      { "pack": "impact", "file": "Audio/footstep_grass_003.ogg", "end": 0.2, "fade": 0.06 },
+      { "pack": "impact", "file": "Audio/footstep_grass_004.ogg", "end": 0.2, "fade": 0.06 }
+    ]
+  },
+  "_notes": {
+    "jump": "first swish of each cloth rustle; the lead-in is trimmed so the swish starts within ~40 ms of the jump",
+    "land": "low soft thud; the game layers a grass step on top so it carries on small speakers",
+    "step": "grass crunch is ~0.12 s of sound in a ~0.7 s file; the dead tail is cut"
+  }
+}

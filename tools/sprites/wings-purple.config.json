@@ -1,0 +1,14 @@
+{
+  "source": "purplewings.png",
+  "out": "assets/sprites/wings-purple/wings-purple",
+  "frames": ["w01"],
+  "alphaFloor": 24,
+  "minFramePixels": 3000,
+  "rowTolerance": 120,
+  "attachRadius": 30,
+  "fringe": 3,
+  "pivot": { "mode": "waist", "range": [0.45, 0.85] },
+  "padding": 8,
+  "downsample": 2,
+  "_notes": { "pivot": "the wing root: where the big and small wing meet (narrowest vertical slice)", "downsample": "art is ~4x larger than shown; halving keeps it crisp at 2x display size" }
+}

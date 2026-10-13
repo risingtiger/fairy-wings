@@ -1,0 +1,22 @@
+{
+  "name": "sidescroller",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc",
+    "sounds": "node tools/audio/cut-sounds.mjs tools/audio/sounds.config.json",
+    "sprites": "node tools/sprites/align-sheet.mjs tools/sprites/fairy.config.json && node tools/sprites/pack-sheet.mjs tools/sprites/wings.config.json && node tools/sprites/pack-sheet.mjs tools/sprites/wings-purple.config.json && node tools/sprites/pack-sheet.mjs tools/sprites/star.config.json"
+  },
+  "dependencies": {
+    "lit-html": "3.3.3"
+  },
+  "devDependencies": {
+    "@webgpu/types": "0.1.74",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  }
+}

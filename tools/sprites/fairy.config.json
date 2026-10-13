@@ -1,0 +1,227 @@
+{
+  "source": "exec-3bba27ae-55de-4021-bcce-1a404e616afa.png",
+  "out": "assets/sprites/fairy/fairy",
+  "frames": [
+    "idle",
+    "blink",
+    "walk1",
+    "walk2",
+    "walk3",
+    "walk4",
+    "run1",
+    "run2",
+    "run3",
+    "run4",
+    "jumpStart",
+    "jumpUp",
+    "fall",
+    "attack",
+    "cast",
+    "hurt",
+    "crouch"
+  ],
+  "reference": "idle",
+  "airborne": [
+    "jumpUp",
+    "fall"
+  ],
+  "alphaFloor": 24,
+  "minFramePixels": 600,
+  "rowTolerance": 90,
+  "skin": {
+    "minR": 232,
+    "minG": 205,
+    "minB": 180,
+    "minRminusB": 16,
+    "minGminusB": 6
+  },
+  "headBox": [
+    -45,
+    -62,
+    40,
+    28
+  ],
+  "scaleBoxes": {
+    "head": [
+      -45,
+      -62,
+      40,
+      28
+    ],
+    "face": [
+      -24,
+      -22,
+      22,
+      18
+    ],
+    "crown": [
+      -45,
+      -62,
+      40,
+      -20
+    ]
+  },
+  "searchRadius": 14,
+  "scaleRange": [
+    0.92,
+    1.08
+  ],
+  "minScaleConfidence": 0.6,
+  "overrides": {
+    "blink": {
+      "scale": 1
+    }
+  },
+  "socketsFromHead": {
+    "back": [
+      -38,
+      26
+    ]
+  },
+  "socketNudges": {
+    "fall": {
+      "back": [
+        -28,
+        0
+      ]
+    },
+    "hurt": {
+      "back": [
+        -8,
+        0
+      ]
+    },
+    "crouch": {
+      "back": [
+        0,
+        -14
+      ]
+    }
+  },
+  "sockets": {
+    "cast": {
+      "wand": [
+        142,
+        -242
+      ]
+    },
+    "attack": {
+      "wand": [
+        160,
+        -182
+      ]
+    }
+  },
+  "_notes": {
+    "sockets": "attachment points in output pixels relative to the pivot (measured on the aligned sheet)",
+    "boxes": "x0, y0, x1, y1 in pixels around the reference pose's face centre",
+    "overrides": "per frame: scale (force), pivotDx / pivotDy (nudge the pivot in pixels)",
+    "blink": "same drawing as idle with eyes closed (identical 276px height); auto-scaling it would dip the head ~4px"
+  },
+  "padding": 6,
+  "layout": [
+    [
+      "idle",
+      "blink",
+      "crouch"
+    ],
+    [
+      "walk1",
+      "walk2",
+      "walk3",
+      "walk4"
+    ],
+    [
+      "run1",
+      "run2",
+      "run3",
+      "run4"
+    ],
+    [
+      "jumpStart",
+      "jumpUp",
+      "fall"
+    ],
+    [
+      "attack",
+      "cast",
+      "hurt"
+    ]
+  ],
+  "animations": {
+    "idle": {
+      "frames": [
+        "idle"
+      ],
+      "loop": true
+    },
+    "blink": {
+      "frames": [
+        "blink"
+      ],
+      "fps": 8
+    },
+    "walk": {
+      "frames": [
+        "walk1",
+        "walk2",
+        "walk3",
+        "walk4"
+      ],
+      "fps": 8,
+      "loop": true
+    },
+    "run": {
+      "frames": [
+        "run1",
+        "run2",
+        "run3",
+        "run4"
+      ],
+      "fps": 12,
+      "loop": true
+    },
+    "crouch": {
+      "frames": [
+        "crouch"
+      ],
+      "loop": true
+    },
+    "jumpStart": {
+      "frames": [
+        "jumpStart"
+      ],
+      "fps": 12
+    },
+    "jumpUp": {
+      "frames": [
+        "jumpUp"
+      ],
+      "loop": true
+    },
+    "fall": {
+      "frames": [
+        "fall"
+      ],
+      "loop": true
+    },
+    "attack": {
+      "frames": [
+        "attack"
+      ],
+      "fps": 12
+    },
+    "cast": {
+      "frames": [
+        "cast"
+      ],
+      "fps": 12
+    },
+    "hurt": {
+      "frames": [
+        "hurt"
+      ],
+      "fps": 12
+    }
+  }
+}
