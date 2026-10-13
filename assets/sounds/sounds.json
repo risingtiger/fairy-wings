@@ -1,8 +1,6 @@
 {
   "jump": [
-    "jump-1.wav",
-    "jump-2.wav",
-    "jump-3.wav"
+    "jump-1.wav"
   ],
   "land": [
     "land-1.wav",
@@ -11,11 +9,50 @@
     "land-4.wav",
     "land-5.wav"
   ],
+  "landStep": [
+    "landStep-1.wav",
+    "landStep-2.wav",
+    "landStep-3.wav",
+    "landStep-4.wav",
+    "landStep-5.wav"
+  ],
   "step": [
     "step-1.wav",
     "step-2.wav",
     "step-3.wav",
     "step-4.wav",
-    "step-5.wav"
+    "step-5.wav",
+    "step-6.wav"
+  ],
+  "run": [
+    "run-1.wav",
+    "run-2.wav",
+    "run-3.wav",
+    "run-4.wav",
+    "run-5.wav"
+  ],
+  "attack": [
+    "attack-1.wav"
+  ],
+  "star": [
+    "star-1.wav"
+  ],
+  "wings": [
+    "wings-1.wav"
+  ],
+  "hurt": [
+    "hurt-1.wav"
+  ],
+  "stomp": [
+    "stomp-1.wav",
+    "stomp-2.wav",
+    "stomp-3.wav",
+    "stomp-4.wav"
+  ],
+  "toss": [
+    "toss-1.wav"
+  ],
+  "collect": [
+    "collect-1.wav"
   ]
 }
