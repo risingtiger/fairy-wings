@@ -7,11 +7,14 @@ import { SpriteRenderer } from './engine/render/sprite-renderer';
 import { loadIntroAssets } from './game/assets';
 import { ACTIONS, BINDINGS } from './game/controls';
 import { IntroScene, SKY_TOP } from './game/intro-scene';
+import { VoiceCues } from './game/voice-cues';
+import { createVoice } from './game/voiceovers';
 import { Hud } from './hud/hud';
 
 async function main(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
   const hud = new Hud(document.querySelector<HTMLElement>('#hud')!);
+  const voice = createVoice(); // first, so its lines load while the graphics start up
 
   const gpu = await initGpu(canvas, (message) => hud.update({ status: 'error', message: `The graphics device was lost (${message}). Reload the page to continue.` }));
   const { device, context } = gpu;
@@ -23,6 +26,7 @@ async function main(): Promise<void> {
     wingsChanged: (badge) => hud.update({ wingName: badge?.name ?? '', wingsWorn: badge?.worn ?? false }),
     starsChanged: (count) => hud.update({ stars: count }),
   });
+  const cues = new VoiceCues(voice, scene);
   scene.sounds.muted = loadMuted();
   hud.update({ muted: scene.sounds.muted, starGoal: scene.quest.starGoal });
   const input = new Input(window, ACTIONS, BINDINGS);
@@ -44,6 +48,7 @@ async function main(): Promise<void> {
     },
     update(dt, now) {
       scene.update(dt, now, input);
+      cues.update();
     },
     render(alpha, now) {
       renderer.begin();
@@ -72,7 +77,7 @@ async function main(): Promise<void> {
 
   hud.update({ status: 'ready' });
   loop.start();
-  if (import.meta.env.DEV) Object.assign(window, { game: { scene, renderer, loop, input } }); // console debugging
+  if (import.meta.env.DEV) Object.assign(window, { game: { scene, renderer, loop, input, voice } }); // console debugging
 }
 
 // the sound switch is remembered per browser; storage can be unavailable (private windows), so it's best effort
