@@ -1,6 +1,8 @@
 // Builds the game's sound effects from free sound packs.
 //
-// Each pack is downloaded once into tools/audio/.cache. Every take listed in the config is cut
+// Each pack is downloaded once into tools/audio/.cache. A pack is either a zip (takes name a `file`
+// inside it) or a single audio file such as a Freesound preview (takes leave `file` out). Every take
+// listed in the config is cut
 // (optional start/end in seconds), faded out, mixed down to mono 44.1 kHz 16-bit WAV (decodes
 // instantly and plays in every browser) and peak-normalised so takes of one sound match in level.
 // Mixing (how loud each sound sits in the game) belongs to the game code, not to these files.
@@ -20,19 +22,27 @@ const cache = path.join(path.dirname(cfgPath), '.cache');
 const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 // --- packs ------------------------------------------------------------------------
-function packDir(id) {
+/** The local path of `file` in pack `id` (or of the pack itself when it's a single audio file), downloading it first if needed. */
+function packFile(id, file) {
   const pack = cfg.packs[id];
   if (!pack) throw new Error(`unknown pack "${id}"`);
   const dir = path.join(cache, id);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(cache, { recursive: true });
-    const zip = path.join(cache, `${id}.zip`);
+  const zipped = new URL(pack.url).pathname.toLowerCase().endsWith('.zip');
+  if (zipped !== (file != null)) throw new Error(`pack "${id}": takes of a zip need a file, takes of a single audio file must not have one`);
+  const single = zipped ? null : path.join(dir, path.basename(new URL(pack.url).pathname));
+  if (!fs.existsSync(single ?? dir)) {
+    fs.mkdirSync(dir, { recursive: true });
     console.log(`downloading ${pack.title}…`);
-    run('curl', ['-sSfL', '-o', zip, pack.url]);
-    run('unzip', ['-q', '-o', zip, '-d', dir]);
-    fs.rmSync(zip);
+    if (single) {
+      run('curl', ['-sSfL', '-o', single, pack.url]);
+    } else {
+      const zip = path.join(cache, `${id}.zip`);
+      run('curl', ['-sSfL', '-o', zip, pack.url]);
+      run('unzip', ['-q', '-o', zip, '-d', dir]);
+      fs.rmSync(zip);
+    }
   }
-  return dir;
+  return single ?? path.join(dir, file);
 }
 
 // --- takes ------------------------------------------------------------------------
@@ -44,7 +54,7 @@ const manifest = {}, used = new Map();
 for (const [name, takes] of Object.entries(cfg.sounds)) {
   manifest[name] = [];
   takes.forEach((take, i) => {
-    const src = path.join(packDir(take.pack), take.file);
+    const src = packFile(take.pack, take.file);
     const trim = [take.start != null && `start=${take.start}`, take.end != null && `end=${take.end}`].filter(Boolean).join(':');
     const fade = take.fade ?? 0.01;
     // fade in a few ms against clicks; the fade out runs on the reversed signal so it needs no length
@@ -58,8 +68,10 @@ for (const [name, takes] of Object.entries(cfg.sounds)) {
     run('ffmpeg', ['-v', 'error', '-y', '-i', tmp, '-af', `volume=${(cfg.peakDb - peak).toFixed(2)}dB`, '-c:a', 'pcm_s16le', path.join(cfg.out, file)]);
     manifest[name].push(file);
     if (!used.has(take.pack)) used.set(take.pack, []);
-    used.get(take.pack).push(`${path.basename(take.file)} → ${file}`);
-    console.log(`${file}  ${path.basename(take.file)}  peak ${peak} dB`);
+    const range = take.start != null || take.end != null ? ` ${take.start ?? 0}–${take.end ?? 'end'} s` : '';
+    const what = `${take.file ? path.basename(take.file) : 'clip'}${range}`;
+    used.get(take.pack).push(`${what} → ${file}`);
+    console.log(`${file}  ${take.pack}: ${what}  peak ${peak} dB`);
   });
 }
 fs.rmSync(tmp, { force: true });

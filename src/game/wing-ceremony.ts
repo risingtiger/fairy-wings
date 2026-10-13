@@ -1,7 +1,9 @@
+import type { SoundBank } from '../engine/audio/sound';
 import { Damped, lerp, Rng } from '../engine/core/math';
 import { ParticleSystem } from '../engine/fx/particles';
 import { Blend, hsla, rgba, Shape, withAlpha, type SpriteRenderer } from '../engine/render/sprite-renderer';
 import type { Player } from './player';
+import type { SoundName } from './sounds';
 import type { Star } from './star';
 import type { OrbEscort, StarOrbs } from './star-orbs';
 import type { WingCharm } from './wing-charm';
@@ -98,6 +100,8 @@ export class WingCeremony {
     private readonly wings: Wings,
     private readonly star: Star,
     private readonly orbs: StarOrbs,
+    /** Plays the wings fanfare the moment they touch her (optional so the ceremony runs silent without it). */
+    private readonly sounds?: SoundBank<SoundName>,
   ) {}
 
   /** True from the moment the wings wake until she's back on the grass. */
@@ -129,6 +133,7 @@ export class WingCeremony {
     if (this.phase !== 'awaken' && this.phase !== 'descend') return;
     const p = this.player, x = p.x, y = p.y - 160;
     this.enter('lift');
+    this.sounds?.play('wings');
     p.levitate(CEREMONY.liftY);
     this.wings.celebrating = true;
     this.flash = 1;
