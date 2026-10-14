@@ -1,0 +1,64 @@
+<!doctype html>
+<!-- Listen to the background music side by side. Open through the dev server:
+     http://localhost:5173/tools/audio/music-audition.html
+     "In the game" plays the built files from assets/music; "Alternates" stream straight from OpenGameArt
+     (all CC0). To swap one in, add it to tools/audio/music.config.json and run `npm run music`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music audition</title>
+<style>
+  body { font: 15px/1.4 system-ui, sans-serif; margin: 0 auto; max-width: 760px; padding: 16px; background: #f7f5ef; color: #222; }
+  h1 { font-size: 22px; } h2 { font-size: 17px; margin-top: 28px; }
+  .t { background: #fff; border-radius: 10px; padding: 10px 14px; margin: 8px 0; box-shadow: 0 1px 3px #0002; }
+  .t b { font-size: 16px; } .t small { color: #666; } .t a { color: #666; }
+  audio { width: 100%; margin-top: 6px; height: 34px; }
+</style>
+</head>
+<body>
+<h1>Background music audition</h1>
+<p>Only one track plays at a time. Starting another one pauses the last.</p>
+<h2>In the game now</h2><div id="game"></div>
+<h2>Alternates (CC0, not in the game)</h2><div id="alt"></div>
+<script>
+const OGA = 'https://opengameart.org/sites/default/files/';
+const POUPI = OGA + "Komiku%20-%20Poupi%27s%20incredible%20adventures%20%21%20-%20";
+const game = [
+  ['Sunflower Valley', 'isaiah658', 'upbeat 3D-platformer level theme, Spyro style', '/music/sunflower-valley.mp3'],
+  ['Minstrel Dance', 'RandomMind', 'lively lute-and-drum fantasy dance', '/music/minstrel-dance.mp3'],
+  ['Rejoicing', 'RandomMind', 'bright, festive fantasy tune', '/music/rejoicing.mp3'],
+  ['Treasure Hunter', 'TAD', 'orchestral adventure loop: strings, brass, drums', '/music/treasure-hunter.mp3'],
+  ['Choco Birds Run', 'Bobjt', 'quick, bouncy RPG riding tune', '/music/choco-birds-run.mp3'],
+  ['Superhero (violin)', 'Cleyton Kauffman', 'driving rock-and-violin action loop', '/music/superhero.mp3'],
+  ["A Knight's Challenge", 'Umplix', 'heroic but friendly battle theme (the danger one)', '/music/knights-challenge.mp3'],
+];
+const alt = [
+  ['Determined to Fly', 'OwlishMedia', 'orchestral/celtic climb to a big finish; fits earning wings', OGA + 'climax.wav', 'determined-to-fly'],
+  ['The Adventure', 'Komiku', 'quirky, upbeat game-soundtrack adventure', POUPI + '22%20The%20adventure_0.mp3', 'poupis-incredible-adventures-full-album'],
+  ['Travel to the Horizon', 'Komiku', 'bright travelling theme', POUPI + '43%20Travel%20to%20the%20Horizon_0.mp3', 'poupis-incredible-adventures-full-album'],
+  ['Escaping like Indiana Jones', 'Komiku', 'chase music, playful danger', POUPI + '54%20Escaping%20like%20Indiana%20Jones_0.mp3', 'poupis-incredible-adventures-full-album'],
+  ['La Montagne', 'Komiku', 'joyful, uplifting, fast electro-acoustic', OGA + 'Komiku_-_07_-_La_montagne_0.mp3', 'la-montagne'],
+  ['Market Day', 'RandomMind', 'medieval market bustle', OGA + 'Market_Day.mp3', 'medieval-market-day'],
+  ["King's Feast", 'RandomMind', 'medieval feast', OGA + 'Kings_Feast_0.mp3', 'medieval-kings-feast'],
+  ['Green Hills', 'Igor Gundarev', 'happy 2D-platformer theme', OGA + 'Green%20Hills.mp3', 'green-hills'],
+  ['Superhero (rock original)', 'Cleyton Kauffman', 'same as above without the violin, more electric guitar', OGA + 'Superhero_pack_0.zip', 'adventure-theme'],
+  ['Celtic Loop', 'stereoscopic', 'short Irish-folk jig loop', OGA + 'celtic_0.mp3', 'celtic-loop'],
+  ['Brassy Bubbles', 'Technodono', 'punchy, playful brass', OGA + 'brassy_bubbles_0.mp3', 'brassy-bubbles'],
+  ['Fantasy Orchestral Theme', 'Joth', 'big orchestral build-up', OGA + 'FantasyOrchestralTheme_1.mp3', 'fantasy-orchestral-theme'],
+  ['A Legend Will Rise', 'CodeManu', 'epic, uplifting orchestral', OGA + 'A%20Legend%20Will%20Rise.mp3', 'a-legend-will-rise-orchestral'],
+  ['Adventure Time', 'Scribe', 'medieval sounds plus rock', OGA + 'adventuring_song.mp3', 'adventure-time'],
+];
+function row([title, author, mood, src, page]) {
+  const d = document.createElement('div'); d.className = 't';
+  const link = page ? ` · <a href="https://opengameart.org/content/${page}" target="_blank">page</a>` : '';
+  const player = src.endsWith('.zip') ? '<div><small>(download only: it\'s inside a zip; listen on the page)</small></div>' : `<audio controls preload="none" src="${src}"></audio>`;
+  d.innerHTML = `<b>${title}</b> <small>by ${author} · ${mood}${link}</small>${player}`;
+  return d;
+}
+game.forEach(t => document.getElementById('game').append(row(t)));
+alt.forEach(t => document.getElementById('alt').append(row(t)));
+document.addEventListener('play', e => document.querySelectorAll('audio').forEach(a => a !== e.target && a.pause()), true);
+</script>
+</body>
+</html>

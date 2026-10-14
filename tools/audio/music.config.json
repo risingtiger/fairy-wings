@@ -5,70 +5,80 @@
   "fadeOut": 2.5,
   "tracks": [
     {
-      "id": "once-upon-a-time",
-      "title": "Once Upon a Time (loop)",
+      "id": "sunflower-valley",
+      "title": "Sunflower Valley",
+      "author": "isaiah658",
+      "page": "https://opengameart.org/content/sunflower-valley",
+      "url": "https://opengameart.org/sites/default/files/Sunflower-Valley-isaiah658_0.mp3",
+      "license": "CC0 1.0",
+      "repeat": 1,
+      "mood": "upbeat 3D-platformer level theme in the style of the original Spyro games"
+    },
+    {
+      "id": "minstrel-dance",
+      "title": "Medieval: Minstrel Dance",
+      "author": "RandomMind",
+      "page": "https://opengameart.org/content/medieval-minstrel-dance",
+      "url": "https://opengameart.org/sites/default/files/Minstrel_Dance_0.mp3",
+      "license": "CC0 1.0",
+      "repeat": 1,
+      "mood": "lively lute-and-drum fantasy dance"
+    },
+    {
+      "id": "rejoicing",
+      "title": "Medieval: Rejoicing",
+      "author": "RandomMind",
+      "page": "https://opengameart.org/content/medieval-rejoicing",
+      "url": "https://opengameart.org/sites/default/files/Rejoicing_0.mp3",
+      "license": "CC0 1.0",
+      "repeat": 1,
+      "mood": "bright, festive fantasy tune"
+    },
+    {
+      "id": "treasure-hunter",
+      "title": "Treasure Hunter",
       "author": "TAD",
-      "page": "https://opengameart.org/content/once-upon-a-time-loop",
-      "url": "https://opengameart.org/sites/default/files/once_upon_a_time_loop.wav",
-      "license": "CC0 1.0",
-      "repeat": 3,
-      "mood": "happy fantasy storybook theme: piano and orchestra"
-    },
-    {
-      "id": "trouble-in-the-garden",
-      "title": "Trouble in the Garden",
-      "author": "Augmentality (Brandon Morris)",
-      "page": "https://opengameart.org/content/trouble-in-the-garden",
-      "url": "https://opengameart.org/sites/default/files/trouble%20in%20the%20garden.ogg",
-      "license": "CC0 1.0 (dual-licensed OGA-BY 3.0)",
-      "repeat": 1,
-      "mood": "silly, sneaky, mischievous fantasy tune (the hint of danger)"
-    },
-    {
-      "id": "rpg-overworld",
-      "title": "RPG Overworld (from 2 Whimsical RPG Themes)",
-      "author": "Karate Studios",
-      "page": "https://opengameart.org/content/2-whimsical-rpg-themes",
-      "url": "https://opengameart.org/sites/default/files/RPG%20Overworld.flac",
+      "page": "https://opengameart.org/content/treasure-hunter",
+      "url": "https://opengameart.org/sites/default/files/treasure_hunter_0.mp3",
       "license": "CC0 1.0",
       "repeat": 2,
-      "mood": "whimsical adventure: flute, ocarina and plucked strings"
+      "mood": "orchestral adventure loop: strings, brass and drums"
     },
     {
-      "id": "snowfall",
-      "title": "Snowfall (looped version)",
-      "author": "Kistol",
-      "page": "https://opengameart.org/content/snowfall",
-      "url": "https://opengameart.org/sites/default/files/Snowfall%20%28Looped%20ver.%29_0.ogg",
+      "id": "choco-birds-run",
+      "title": "Choco Birds Run",
+      "author": "Bobjt",
+      "page": "https://opengameart.org/content/choco-birds-run",
+      "url": "https://opengameart.org/sites/default/files/choco%20birds%20run.mp3",
       "license": "CC0 1.0",
-      "repeat": 3,
-      "mood": "light, playful piano waltz"
+      "repeat": 2,
+      "mood": "quick, bouncy RPG riding tune (think Final Fantasy's chocobo theme)"
     },
     {
-      "id": "childrens-march",
-      "title": "Children's March Theme",
+      "id": "superhero",
+      "title": "Adventure Theme: Superhero (violin, no intro)",
       "author": "Cleyton Kauffman",
-      "page": "https://opengameart.org/content/childrens-march-theme",
-      "url": "https://opengameart.org/sites/default/files/childrens_march_theme.zip",
-      "file": "Children's March Theme.wav",
+      "page": "https://opengameart.org/content/adventure-theme",
+      "url": "https://opengameart.org/sites/default/files/Superhero_pack_0.zip",
+      "file": "Superhero_pack/Superhero_violin_no_intro.ogg",
       "license": "CC0 1.0",
       "repeat": 2,
-      "mood": "cheerful, cute march: flute, trombone and snare"
+      "mood": "driving rock-and-violin action loop (Mega Man / Sonic inspired)"
     },
     {
-      "id": "music-box",
-      "title": "Music Box: Cute Tune (from 4 Music Box Tracks)",
-      "author": "Aureolus_Omicron",
-      "page": "https://opengameart.org/content/4-music-box-tracks",
-      "url": "https://opengameart.org/sites/default/files/4_music_box_tracks_ogg.zip",
-      "file": "musicbox2_cute_tune.ogg",
+      "id": "knights-challenge",
+      "title": "A Knight's Challenge",
+      "author": "Umplix",
+      "page": "https://opengameart.org/content/a-knights-challenge",
+      "url": "https://opengameart.org/sites/default/files/a_knights_challenge.wav",
       "license": "CC0 1.0",
-      "repeat": 1,
-      "mood": "cute celesta music box"
+      "repeat": 2,
+      "mood": "heroic but friendly battle theme (the hint of danger)"
     }
   ],
   "_notes": {
-    "repeat": "most sources are short seamless loops (about a minute); repeating them inside the file gives each play two to three minutes without an MP3 gap at the seam",
+    "history": "2026-10-13: the first set (music box, children's march, storybook piano) was too slow and babyish; replaced with these higher-energy adventure tracks",
+    "repeat": "short seamless loops are repeated inside the file so each play runs about two minutes without an MP3 gap at the seam",
     "format": "MP3 plays in every browser (Safari included) and streams through an <audio> element",
     "loudness": "two-pass EBU R128 loudnorm to the same integrated level, so the game sets the music level in one place"
   }

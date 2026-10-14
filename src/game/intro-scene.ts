@@ -24,7 +24,7 @@ const SKY = { r: 30 / 255, g: 148 / 255, b: 251 / 255, a: 1 };
 export const SKY_TOP: GPUColor = SKY;
 /**
  * Both pairs of wings float over the start, just higher than she can jump (her head tops out around
- * y = -560). They're locked: earning every star brings the purple pair flying to her, wherever she is.
+ * y = -660). They're locked: earning every star brings the purple pair flying to her, wherever she is.
  */
 const CHARMS: { id: WingId; x: number; y: number }[] = [
   { id: 'purple', x: 270, y: -740 },
@@ -242,8 +242,8 @@ export class IntroScene implements PlayerEvents {
   jumped(x: number, y: number): void { this.effects.jumped(x, y); this.sounds.play('jump'); }
   landed(x: number, y: number, impact: number): void {
     this.effects.landed(x, y, impact);
-    // a full jump lands at ~1550 units/s, a tap ~900, a fall from flight 1900; a hovering touchdown barely moves
-    const hard = clamp((impact - 150) / 1750, 0, 1);
+    // a full jump lands at ~1830 units/s, a tap ~1440, a fall from flight 1900; a hovering touchdown barely moves
+    const hard = clamp((impact - 150) / 2100, 0, 1);
     this.sounds.play('landStep', 0.45 + 0.55 * hard);
     this.sounds.play('land', hard, 1.1 - 0.2 * hard);
   }
@@ -255,7 +255,12 @@ export class IntroScene implements PlayerEvents {
     this.effects.attacked(x, y, facing);
     this.sounds.play('attack');
     this.star.react('twinkle', 0.5);
-    this.quest.attacked(facing); // the wand catches the right letter (a wrong one knocks her back)
+    this.quest.attacked(facing); // the wand knocks the letter in front of her off the screen
+  }
+  captured(x: number, y: number, facing: number): void {
+    this.effects.capture(x, y, facing);
+    this.sounds.play('toss', 0.5, 1.25); // a soft rising shimmer as her wand reaches out
+    this.quest.captured(facing); // catches the right letter (a wrong one knocks her back)
   }
   cast(x: number, y: number, facing: number): void { this.effects.cast(x, y, facing); this.star.react('cheer', 0.8); }
   hurt(x: number, y: number): void {

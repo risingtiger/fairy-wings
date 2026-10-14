@@ -1,40 +1,46 @@
 {
   "tracks": [
     {
-      "file": "once-upon-a-time.mp3",
-      "title": "Once Upon a Time (loop)",
+      "file": "sunflower-valley.mp3",
+      "title": "Sunflower Valley",
+      "author": "isaiah658",
+      "seconds": 142
+    },
+    {
+      "file": "minstrel-dance.mp3",
+      "title": "Medieval: Minstrel Dance",
+      "author": "RandomMind",
+      "seconds": 139
+    },
+    {
+      "file": "rejoicing.mp3",
+      "title": "Medieval: Rejoicing",
+      "author": "RandomMind",
+      "seconds": 103
+    },
+    {
+      "file": "treasure-hunter.mp3",
+      "title": "Treasure Hunter",
       "author": "TAD",
-      "seconds": 173
+      "seconds": 130
     },
     {
-      "file": "trouble-in-the-garden.mp3",
-      "title": "Trouble in the Garden",
-      "author": "Augmentality (Brandon Morris)",
-      "seconds": 106
+      "file": "choco-birds-run.mp3",
+      "title": "Choco Birds Run",
+      "author": "Bobjt",
+      "seconds": 140
     },
     {
-      "file": "rpg-overworld.mp3",
-      "title": "RPG Overworld (from 2 Whimsical RPG Themes)",
-      "author": "Karate Studios",
-      "seconds": 117
-    },
-    {
-      "file": "snowfall.mp3",
-      "title": "Snowfall (looped version)",
-      "author": "Kistol",
-      "seconds": 149
-    },
-    {
-      "file": "childrens-march.mp3",
-      "title": "Children's March Theme",
+      "file": "superhero.mp3",
+      "title": "Adventure Theme: Superhero (violin, no intro)",
       "author": "Cleyton Kauffman",
-      "seconds": 128
+      "seconds": 139
     },
     {
-      "file": "music-box.mp3",
-      "title": "Music Box: Cute Tune (from 4 Music Box Tracks)",
-      "author": "Aureolus_Omicron",
-      "seconds": 137
+      "file": "knights-challenge.mp3",
+      "title": "A Knight's Challenge",
+      "author": "Umplix",
+      "seconds": 125
     }
   ]
 }

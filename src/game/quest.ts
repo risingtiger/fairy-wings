@@ -30,6 +30,8 @@ export const QUEST = {
    * word up: seconds he talks for.
    */
   helloFor: 11,
+  /** Seconds he keeps his hand up waving once his hello is over (he waves all through it, too). */
+  waveAfterHello: 15,
   /** Seconds the new word's missing letter glows gold, for her to remember, before it floats away. */
   memorise: 3,
   /**
@@ -45,8 +47,16 @@ export const QUEST = {
   maxWalkers: 6,
   /** How far behind the left wall a letter goes before it's gone for good. */
   cullBehind: 300,
-  /** Seconds the caught letter jumps for joy before it flies up into the word. */
+  /** Seconds the caught letter jumps for joy before it floats up beside the sidekick. */
   cheerFor: 0.9,
+  /**
+   * There it waits for the grown-up's first word (they ask her for the letter's sound), and stays at
+   * least this long (s), so it's seen to arrive, before flying up into the word.
+   */
+  hoverAtLeast: 1.2,
+  /** Where it hangs beside the sidekick: this far out from its middle, on the side away from her, and this far below it. */
+  hoverSide: 135,
+  hoverBelow: 10,
   /** The elf, bringing her star: his running speed, and where he stops (this far ahead of her). */
   elfRunSpeed: 980,
   elfStop: 290,
@@ -67,17 +77,19 @@ export interface QuestEvents {
 export interface QuestView { x: number; y: number; width: number; height: number; wallX: number }
 
 type Phase =
-  | 'greet' | 'hello' | 'toss' | 'memorise' | 'vanish' | 'hunt' | 'caught' | 'flying' | 'confirm'
+  | 'greet' | 'hello' | 'toss' | 'memorise' | 'vanish' | 'hunt' | 'caught' | 'hover' | 'flying' | 'confirm'
   | 'elfRun' | 'give' | 'next' | 'wings' | 'free';
 
 /**
  * The reading quest, told without words. She walks up to the elf; he tosses a word up, and it floats
  * to the top of the screen and stays there. One letter glows gold for a moment, for her to remember,
  * then melts into lights and floats away, leaving a gap. Off she goes to the right, where letters come
- * walking along on little legs. The wrong ones bump her (or she can bounce on their heads and send
- * them tumbling away); the right one she catches with her wand, and it jumps for joy and flies up
- * into the gap. She reads the word aloud, a grown-up types "ok", and the elf comes running with a
- * star, which flies up to swirl around the sidekick with the others. All of them earn her wings.
+ * walking along on little legs. The wrong ones bump her: she jumps over them (or bounces off their
+ * heads), or knocks them off with her wand and they tumble away; the right one she catches (L), and it
+ * jumps for joy and floats up beside the sidekick (knock the right one off and she has to find it
+ * again further on). She says its sound and a grown-up types "ok"; it flies up into the gap. She
+ * reads the word aloud, the grown-up types "ok" again, and the elf comes running with a star, which
+ * flies up to swirl around the sidekick with the others. All of them earn her wings.
  */
 export class ReadingQuest {
   phase: Phase = 'greet';
@@ -90,6 +102,12 @@ export class ReadingQuest {
   /** The latest frame timestamp (ms), and when the wait for the grown-up's word began. */
   private now = 0;
   private confirmSince = 0;
+  /**
+   * The grown-up's two checks this round: once she's said the caught letter's sound, and once she's
+   * read the whole word.
+   */
+  private soundOk = false;
+  private wordOk = false;
   private greeted = false;
   private nextSpawnX = 0;
   private wrongLeft = 0;
@@ -119,34 +137,47 @@ export class ReadingQuest {
   get keyLetter(): string | null { return this.phase === 'hunt' ? ROUNDS[this.round].word[ROUNDS[this.round].missing] : null; }
 
   /**
-   * She swung her wand (facing that way). Right in front of the letter she needs, that catches it;
-   * a wrong letter crackles back and knocks her over.
+   * She swung her wand (J, facing that way): the letter right in front of her flips upside down and
+   * tumbles off the bottom of the screen. The right one too: then she has to go on and find it again.
    */
   attacked(facing: number): void {
     if (this.phase !== 'hunt') return;
-    const p = this.player, chestY = p.y - 160;
-    let best: LetterWalker | null = null, bestAhead = Infinity;
-    for (const w of this.walkers) {
-      if (!w.active) continue;
-      const ahead = (w.x - p.x) * facing, dy = w.centerY - chestY;
-      if (ahead < -w.halfWidth - 50 || ahead > w.halfWidth + 220 || Math.abs(dy) > 200) continue;
-      if (ahead < bestAhead) { best = w; bestAhead = ahead; }
-    }
-    if (!best) return;
-    if (best.isKey) { this.catchLetter(best); return; }
-    best.bump(p.x);
-    this.effects.zap(best.centerX - facing * best.halfWidth, best.centerY, -facing);
-    p.hurtBy(best.x);
+    const w = this.inFront(facing);
+    if (w) this.knockOff(w);
   }
 
   /**
-   * Call first each step, before she moves: listens for the grown-up's word while the quest waits for
-   * it. That word is typed on the keyboard, and its K would otherwise also make her cast a spell.
+   * She reached out to catch a letter (L, facing that way). The one she needs is caught; a wrong one
+   * crackles back and knocks her over.
+   */
+  captured(facing: number): void {
+    if (this.phase !== 'hunt') return;
+    const w = this.inFront(facing), p = this.player;
+    if (!w) return;
+    if (w.isKey) { this.catchLetter(w); return; }
+    w.bump(p.x);
+    this.effects.zap(w.centerX - facing * w.halfWidth, w.centerY, -facing);
+    p.hurtBy(w.x);
+  }
+
+  /**
+   * Call first each step, before she moves: listens for the grown-up's word, twice a round. The
+   * first (she said the letter's sound) counts from the moment she catches it, the second (she read
+   * the word) from the moment the first was typed; so a grown-up quick off the mark, typing before the
+   * letter has got where it's going, still counts, and it moves on as soon as it arrives. That word is
+   * typed on the keyboard, and its K would otherwise also make her cast a spell.
    */
   listen(input: Input<Action>, now: number): void {
-    if (this.phase !== 'confirm' || !input.typed(QUEST.grownUpWord, this.confirmSince)) return;
+    const p = this.phase;
+    if (p !== 'caught' && p !== 'hover' && p !== 'flying' && p !== 'confirm') return;
+    if (this.wordOk || !input.typed(QUEST.grownUpWord, this.confirmSince)) return;
     input.take('cast', now, 1000);
-    this.cheer();
+    this.confirmSince = now; // the next check needs the word typed afresh
+    if (!this.soundOk) this.soundOk = true;
+    else {
+      this.wordOk = true;
+      if (p === 'confirm') this.cheer();
+    }
   }
 
   /** `view` is where the camera is this step (and the left wall), for placing things on and off screen. */
@@ -173,6 +204,7 @@ export class ReadingQuest {
           // she's reached the elf for the first time: he says hello before giving her the first word
           this.greeted = true;
           elf.talk(true); // his hello voice-over starts now (see VoiceCues)
+          elf.wave(QUEST.helloFor + QUEST.waveAfterHello);
           this.enter('hello');
         } else this.toss();
         break;
@@ -206,18 +238,28 @@ export class ReadingQuest {
         break;
       case 'caught':
         if (this.caught && this.caught.happyFor >= QUEST.cheerFor) {
-          const w = this.caught;
-          this.caught = null;
-          this.sign.receive(w.orbs, -view.x, -view.y, () => {
-            // in it goes, quietly: the celebration waits for the grown-up (see listen)
-            this.sounds.play('collect', 0.6, 1.3); // a soft, higher twinkle as it settles
-            this.confirmSince = this.now;
-            this.enter('confirm');
-          });
-          this.retire(w);
-          this.enter('flying');
+          this.enter('hover');
+          this.hover(this.caught);
         }
         break;
+      case 'hover': {
+        const w = this.caught!;
+        this.hover(w);
+        // it waits by the sidekick until the grown-up has heard her say its sound (see listen)
+        if (!this.soundOk || this.phaseTime < QUEST.hoverAtLeast) break;
+        this.caught = null;
+        w.orbs.highlight = 0;
+        this.sign.receive(w.orbs, -view.x, -view.y, () => {
+          // in it goes, quietly: the celebration waits for the grown-up's second word (see listen)
+          this.sounds.play('collect', 0.6, 1.3); // a soft, higher twinkle as it settles
+          this.enter('confirm');
+          if (this.wordOk) this.cheer();
+        });
+        this.retire(w);
+        this.sounds.play('toss', 0.7, 1.2); // off it goes, up to the word
+        this.enter('flying');
+        break;
+      }
       case 'elfRun': {
         // he runs in to just ahead of her, however far behind he was
         const target = p.x + QUEST.elfStop, dx = target - elf.x;
@@ -303,10 +345,39 @@ export class ReadingQuest {
     this.hand.y = elf.y - 216;
   }
 
+  /** The nearest walking letter within reach of her wand, facing that way. */
+  private inFront(facing: number): LetterWalker | null {
+    const p = this.player, chestY = p.y - 160;
+    let best: LetterWalker | null = null, bestAhead = Infinity;
+    for (const w of this.walkers) {
+      if (!w.active) continue;
+      const ahead = (w.x - p.x) * facing, dy = w.centerY - chestY;
+      if (ahead < -w.halfWidth - 50 || ahead > w.halfWidth + 220 || Math.abs(dy) > 200) continue;
+      if (ahead < bestAhead) { best = w; bestAhead = ahead; }
+    }
+    return best;
+  }
+
+  /**
+   * Her wand: the letter flips over and falls out of the world. If it was the one she needs,
+   * another one comes walking along after a few more wrong ones.
+   */
+  private knockOff(w: LetterWalker): void {
+    w.knockOff(this.player.x);
+    this.effects.stomp(w.centerX, w.centerY);
+    this.sounds.play('stomp');
+    if (w.isKey) {
+      this.wrongLeft = this.pick(QUEST.keyAfter[0], QUEST.keyAfter[1]);
+      this.star.react('curious', 0.9);
+    } else this.star.react('cheer', 0.8);
+  }
+
   /** The right letter, caught: it jumps for joy; the others scatter into sparkles so she can read in peace. */
   private catchLetter(w: LetterWalker): void {
     w.cheer();
     this.caught = w;
+    this.confirmSince = this.now;
+    this.soundOk = this.wordOk = false;
     this.effects.collect(w.centerX, w.centerY);
     this.sounds.play('collect');
     this.star.react('cheer', 1.2);
@@ -317,6 +388,12 @@ export class ReadingQuest {
       this.retire(o);
     }
     this.enter('caught');
+  }
+
+  /** Holds the caught letter up in the air beside the sidekick, on the side away from her. */
+  private hover(w: LetterWalker): void {
+    const s = this.star.position, side = s.x >= this.player.x ? 1 : -1;
+    w.hoverAt(s.x + side * QUEST.hoverSide, s.y + QUEST.hoverBelow);
   }
 
   /** The grown-up says she read it: the word hops along and the elf comes running with her star. */
@@ -366,8 +443,9 @@ export class ReadingQuest {
   }
 
   /**
-   * Bumps and bounces. Landing on a letter from above sends it tumbling (the right one counts as
-   * caught: no telling off for that); walking into a wrong one knocks her back; the right one never hurts her.
+   * Bumps and bounces. Landing on a letter's head bounces her up off it like a trampoline (every letter
+   * alike, so it never gives the answer away), which carries her on over it; walking into a wrong one
+   * knocks her back; the right one never hurts her.
    */
   private collide(): void {
     const p = this.player, v = this.view;
@@ -382,16 +460,15 @@ export class ReadingQuest {
       }
       const dx = Math.abs(p.x - w.x), top = w.top;
       if (p.vy > 0 && p.prevY <= top + 14 && p.y >= top - 6 && dx < w.halfWidth + 45) {
-        if (w.isKey) { p.bounce(); this.catchLetter(w); return; }
-        w.stomp();
+        w.boing();
         p.bounce();
         this.effects.stomp(w.centerX, top);
         this.sounds.play('stomp');
-        this.star.react('cheer', 0.8);
         continue;
       }
-      // only walking into it knocks her: once she's in it (say she was still flickering safe), she can walk on through
-      const touching = dx < w.halfWidth * 0.8 + 45 && p.y > top + 20 && p.y - 250 < w.bottom, fresh = touching && !w.touching;
+      // only walking into it knocks her: once she's in it (say she was still flickering safe), she can walk on through.
+      // A forgiving box: her feet have to be well down into the letter, and her body well over it.
+      const touching = dx < w.halfWidth * 0.7 + 35 && p.y > top + 30 && p.y - 250 < w.bottom, fresh = touching && !w.touching;
       w.touching = touching;
       if (!fresh || w.isKey) continue;
       if (p.hurtBy(w.x)) w.bump(p.x);

@@ -6,14 +6,17 @@ const TAU = Math.PI * 2;
 
 /** Sizes (world units), speeds (units/s) and timings (s) of the walking letters. */
 export const WALKER = {
-  /** Letter height; its legs add `legLength` below that, so its top is about knee height on her. */
-  height: 138,
-  legLength: 56,
+  /**
+   * Letter height; its stubby legs add `legLength` below that. Small enough that a full jump at a walk
+   * carries her right over one (her feet clear its top at about 140 of the jump's 340).
+   */
+  height: 112,
+  legLength: 34,
   /** How far apart its hips are, at most (narrow letters get narrower hips). */
-  hips: 26,
+  hips: 22,
   /** Distance covered per step, and how high a foot lifts as it swings. */
-  stride: 44,
-  lift: 16,
+  stride: 34,
+  lift: 12,
   /** Pacers trot back and forth; strollers amble to the right, stopping now and then. */
   paceSpeed: 130,
   strollSpeed: 75,
@@ -23,13 +26,17 @@ export const WALKER = {
   hopSpeed: 560,
   gravity: 2300,
   hopEvery: [2.8, 6] as const,
-  /** Stomped: how hard it pops up as it flips over before falling out of the world. */
+  /** Knocked off: how hard it pops up as it flips over, and how fast it tumbles away from her, before falling out of the world. */
   flipPop: 520,
+  flipDrift: 180,
 } as const;
 
 export type Behaviour = 'pace' | 'stroll';
-/** walk / pause on the meadow; hop in the air; flipped (stomped, falling away); happy (caught: a joyful spin). */
-type WalkerState = 'walk' | 'pause' | 'hop' | 'flipped' | 'happy';
+/**
+ * walk / pause on the meadow; hop in the air; flipped (knocked off, falling away); happy (caught: a
+ * joyful spin); float (carried: hanging in the air where it's held, legs dangling).
+ */
+type WalkerState = 'walk' | 'pause' | 'hop' | 'flipped' | 'happy' | 'float';
 
 /** Leg drawing: dots along the leg, outline then fill, so the legs read on grass and sky alike. */
 const LEG_DOTS = 5;
@@ -40,8 +47,8 @@ const LEG_FILL = rgba(255, 244, 252);
  * A letter that has come alive: an orb-swarm letter on two little legs. It trots back and forth over
  * its own patch of meadow ('pace') or ambles slowly to the right, pausing to look about ('stroll'),
  * with a little hop now and then. The letter itself is never mirrored (it has to stay readable); only
- * its legs and its lean show which way it's going. Stomped, it flips upside down, legs kicking, and
- * falls out of the world; caught, it jumps for joy.
+ * its legs and its lean show which way it's going. Bounced on, it squashes like a trampoline; knocked off by her wand, it flips upside down,
+ * legs kicking, and falls out of the world; caught, it jumps for joy, and can then be held up in the air (hoverAt).
  */
 export class LetterWalker {
   readonly orbs: OrbLetter;
@@ -55,6 +62,8 @@ export class LetterWalker {
   /** She's overlapping it (set by whoever checks); a knock only comes when she first walks into it. */
   touching = false;
   private vy = 0;
+  /** Sideways speed while it tumbles away, knocked off. */
+  private vx = 0;
   private dir: 1 | -1 = 1;
   private stateTime = 0;
   private time = 0;
@@ -67,6 +76,8 @@ export class LetterWalker {
   private gait = 0;
   private readonly squash = new Spring(240, 11);
   private readonly rng: Rng;
+  /** Where the middle of the letter is held while it floats (see hoverAt). */
+  private readonly held = { x: 0, y: 0 };
   private readonly hip = { x: 0, y: 0 };
   private readonly knee = { x: 0, y: 0 };
   private readonly foot = { x: 0, y: 0 };
@@ -88,7 +99,7 @@ export class LetterWalker {
     sw.tilt = 0;
     sw.cloudRadius = WALKER.height * 0.55;
     this.x = this.home = x;
-    this.y = this.vy = 0;
+    this.y = this.vy = this.vx = 0;
     this.isKey = isKey;
     this.touching = false;
     this.behaviour = behaviour;
@@ -112,7 +123,7 @@ export class LetterWalker {
   /** World position of the middle of the letter. */
   get centerX(): number { return this.orbs.swarm.anchorX; }
   get centerY(): number { return this.orbs.swarm.anchorY; }
-  /** Still walking about on the meadow (it can bump into her, be stomped or caught). */
+  /** Still walking about on the meadow (it can bump into her, be bounced on, knocked off or caught). */
   get active(): boolean { return this.state === 'walk' || this.state === 'pause' || this.state === 'hop'; }
   /** Flipped over and fallen right out of the world. */
   get fallenOut(): boolean { return this.state === 'flipped' && this.top > 700; }
@@ -121,12 +132,29 @@ export class LetterWalker {
 
   private get anchorY(): number { return this.y - WALKER.legLength - WALKER.height / 2 + 6; }
 
-  /** She jumped on it: it flips upside down and falls off the bottom of the world, legs kicking. */
-  stomp(): void {
+  /**
+   * Caught, it floats up off its feet, legs dangling, and hangs in the air with the middle of the
+   * letter at (x, y), bobbing gently and glowing gold. Call every step with where it should be; it
+   * eases after the point as it moves.
+   */
+  hoverAt(x: number, y: number): void {
+    if (this.state !== 'float') { this.enter('float'); this.vy = 0; this.orbs.flash = 1; }
+    this.held.x = x; this.held.y = y;
+  }
+
+  /** She hit it with her wand: it flips upside down and tumbles off the bottom of the world, away from `fromX`, legs kicking. */
+  knockOff(fromX: number): void {
     this.enter('flipped');
     this.vy = -WALKER.flipPop;
+    this.vx = (this.x < fromX ? -1 : 1) * WALKER.flipDrift;
     this.squash.kick(6);
     this.orbs.flash = 0.8;
+  }
+
+  /** She landed on its head: it squashes down like a trampoline under her and carries on. */
+  boing(): void {
+    this.squash.kick(7);
+    this.orbs.flash = 0.5;
   }
 
   /** It bumped into her: it gives a startled jiggle and stops to think (a pacer then heads the other way), so she can get past. */
@@ -193,12 +221,24 @@ export class LetterWalker {
         }
         break;
       case 'flipped':
+        this.x += this.vx * dt;
         this.fall(dt);
         break;
       case 'happy':
         this.fall(dt);
         if (this.y > 0) { this.y = 0; this.vy = -WALKER.hopSpeed * 0.7; this.squash.kick(4); } // bouncing for joy
         break;
+      case 'float': {
+        // eases after the point it's held at, bobbing; it leans into the way it's being pulled
+        const k = 1 - Math.exp(-dt * 4.5), bob = Math.sin(this.time * 2.6) * 10;
+        const dx = this.held.x - this.x;
+        this.x += dx * k;
+        this.y += (this.held.y + WALKER.legLength + WALKER.height / 2 - 6 + bob - this.y) * k;
+        lean = clamp(dx * 0.0015, -0.3, 0.3);
+        // a slow gold pulse: this is the letter to say out loud
+        this.orbs.highlight = Math.min(1, this.stateTime * 2) * (0.55 + 0.25 * Math.sin(this.time * 4));
+        break;
+      }
     }
     // legs swing with the distance walked, and settle when it stands
     this.gait = clamp(this.gait + (speed > 0 && this.state !== 'hop' ? dt : -dt) * 6, 0, 1);
@@ -223,7 +263,7 @@ export class LetterWalker {
   }
 
   draw(renderer: SpriteRenderer, alpha: number): void {
-    if (this.state !== 'flipped') this.drawShadow(renderer);
+    if (this.state !== 'flipped' && this.state !== 'float') this.drawShadow(renderer);
     this.drawAura(renderer);
     this.drawLegs(renderer);
     this.orbs.draw(renderer, alpha);
@@ -297,17 +337,17 @@ export class LetterWalker {
       this.local(hx, hy, c, s, cx, cy, this.hip);
       this.local(kx, ky, c, s, cx, cy, this.knee);
       this.local(fx, fy, c, s, cx, cy, this.foot);
-      this.drawLeg(renderer, LEG_INK, 17);
-      this.drawLeg(renderer, LEG_FILL, 9);
+      this.drawLeg(renderer, LEG_INK, 15);
+      this.drawLeg(renderer, LEG_FILL, 8);
       // a round little shoe in the letter's colour, toe pointing the way it walks
-      const q = renderer.quad, tx = this.foot.x + c * this.dir * 6, ty = this.foot.y + s * this.dir * 6;
+      const q = renderer.quad, tx = this.foot.x + c * this.dir * 5, ty = this.foot.y + s * this.dir * 5;
       q.reset();
-      q.x = tx; q.y = ty; q.w = 40; q.h = 26; q.rotation = sw.tilt;
+      q.x = tx; q.y = ty; q.w = 34; q.h = 22; q.rotation = sw.tilt;
       q.shape(Shape.Disc, 0.75);
       q.color = LEG_INK;
       renderer.drawShape(Blend.Alpha);
       q.reset();
-      q.x = tx; q.y = ty - c * 1.5; q.w = 31; q.h = 18; q.rotation = sw.tilt;
+      q.x = tx; q.y = ty - c * 1.5; q.w = 26; q.h = 15; q.rotation = sw.tilt;
       q.shape(Shape.Disc, 0.7);
       q.color = shoe;
       renderer.drawShape(Blend.Alpha);

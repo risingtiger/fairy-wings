@@ -54,6 +54,8 @@ export class Npc {
   private wasGreeting = false;
   /** Seconds of the current greeting left. */
   private greetLeft = 0;
+  /** Seconds it keeps waving because it was told to (see wave), whatever `greeting` says. */
+  private waveLeft = 0;
   private holdLeft: number;
   /** The moves-sheet clip playing, or null while it idles. */
   private move: Clip | null = null;
@@ -92,6 +94,12 @@ export class Npc {
 
   /** Starts or stops it looking like it's talking (a happy little bounce per word). */
   talk(on: boolean): void { this.talking = on; }
+
+  /**
+   * Holds its greeting pose for at least `seconds` from now, whether or not `greeting` is on. Moves
+   * still play over it; once a move ends it goes back to waving until the time is up.
+   */
+  wave(seconds: number): void { this.waveLeft = Math.max(this.waveLeft, seconds); }
 
   /** Whether the moves sheet has a clip by this name. */
   canPlay(name: string): boolean { return this.moves?.clips.has(name) ?? false; }
@@ -146,11 +154,12 @@ export class Npc {
     if (this.greeting && !this.wasGreeting) this.greetLeft = this.options.greetFor ?? Infinity;
     this.wasGreeting = this.greeting;
     this.greetLeft -= dt;
+    this.waveLeft -= dt;
     if (this.move) {
       this.anim.update(dt, this.moveRate);
       if (this.anim.finished) this.stand();
     } else {
-      const wave = this.greeting && this.greetPose !== null && this.greetLeft > 0;
+      const wave = this.greetPose !== null && ((this.greeting && this.greetLeft > 0) || this.waveLeft > 0);
       this.holdLeft -= dt;
       if (wave !== this.waving) {
         this.changeTo(this.options.blend);

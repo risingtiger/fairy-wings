@@ -1,7 +1,7 @@
 import type { MusicOptions } from '../engine/audio/music';
 
 /**
- * Background music: storybook-ish CC0 tracks, built by `npm run music` (tools/audio/music.config.json
+ * Background music: upbeat fantasy-adventure CC0 tracks, built by `npm run music` (tools/audio/music.config.json
  * says where each one comes from; assets/music/CREDITS.md credits them). The files are all
  * loudness-normalised to the same level, so how far the music sits under the sound effects is set here.
  */

@@ -19,8 +19,8 @@ export const PLAYER = {
   apexGravity: 0.55, // multiplier near the top of a held jump: a little hang time
   apexSpeed: 150,
   maxFall: 1900,
-  jumpSpeed: 1280, // ~250 units high
-  jumpCut: 0.45, // releasing jump early keeps this much upward speed
+  jumpSpeed: 1500, // ~340 units high held, ~210 tapped: either clears a walking letter (WALKER in letter-walker.ts)
+  jumpCut: 0.6, // releasing jump early keeps this much upward speed (generous, so a small child's quick tap still clears a letter)
   coyoteTime: 0.1,
   jumpBufferMs: 130,
   actionBufferMs: 150,
@@ -30,6 +30,9 @@ export const PLAYER = {
   attackHitAt: 0.04,
   castTime: 0.62,
   castAt: 0.12,
+  /** Capture (L): the cast pose, a little quicker; the wand reaches out to catch a letter at `captureAt`. */
+  captureTime: 0.5,
+  captureAt: 0.1,
   hurtTime: 0.6,
   hurtKnockback: 420,
   hurtHop: 560,
@@ -60,7 +63,7 @@ export interface FlightAbility {
   duration: number;
 }
 
-export type PlayerState = 'idle' | 'walk' | 'run' | 'crouch' | 'jump' | 'fall' | 'fly' | 'land' | 'attack' | 'cast' | 'hurt';
+export type PlayerState = 'idle' | 'walk' | 'run' | 'crouch' | 'jump' | 'fall' | 'fly' | 'land' | 'attack' | 'cast' | 'capture' | 'hurt';
 
 /** Hooks for effects and sound; positions are world space. */
 export interface PlayerEvents {
@@ -69,6 +72,8 @@ export interface PlayerEvents {
   stepped(x: number, y: number, facing: number, running: boolean): void;
   attacked(x: number, y: number, facing: number): void;
   cast(x: number, y: number, facing: number): void;
+  /** She reached out with her wand to catch a letter. */
+  captured(x: number, y: number, facing: number): void;
   hurt(x: number, y: number): void;
   tookOff(x: number, y: number): void;
   /** Limited wings ran out of flight time mid-air. */
@@ -194,13 +199,14 @@ export class Player {
     this.idleTime = anyInput ? 0 : this.idleTime + dt;
 
     // one-shot actions
-    const busy = this.state === 'attack' || this.state === 'cast' || this.state === 'hurt';
+    const busy = this.state === 'attack' || this.state === 'cast' || this.state === 'capture' || this.state === 'hurt';
     if (input.take('hurt', now, P.actionBufferMs) && this.state !== 'hurt') this.getHurt(-this.facing);
     else if (!busy && input.take('attack', now, P.actionBufferMs)) { this.enter('attack'); this.idleTime = 0; }
+    else if (!busy && input.take('capture', now, P.actionBufferMs)) { this.enter('capture'); this.idleTime = 0; }
     else if (!busy && input.take('cast', now, P.actionBufferMs)) { this.enter('cast'); this.idleTime = 0; }
 
     // horizontal: attacks and spells root her on the ground; in the air momentum carries
-    const rooted = this.state === 'hurt' || (this.grounded && (this.state === 'attack' || this.state === 'cast'));
+    const rooted = this.state === 'hurt' || (this.grounded && (this.state === 'attack' || this.state === 'cast' || this.state === 'capture'));
     let target: number, accel: number;
     if (this.flying) {
       target = axis * (running ? P.flyFastSpeed : P.flySpeed);
@@ -372,6 +378,14 @@ export class Player {
         }
         if (this.stateTime >= P.castTime) this.settle(crouching);
         return;
+      case 'capture':
+        if (!this.actionFired && this.stateTime >= P.captureAt) {
+          this.actionFired = true;
+          const [sx, sy] = this.socket('cast', 'wand');
+          this.events.captured(sx, sy, this.facing);
+        }
+        if (this.stateTime >= P.captureTime) this.settle(crouching);
+        return;
       case 'hurt':
         if (this.stateTime >= P.hurtTime && this.grounded) this.settle(crouching);
         return;
@@ -450,7 +464,8 @@ export class Player {
       case 'fly': this.anim.play(this.vy > 380 ? c.fall : c.jumpUp); break;
       case 'land': this.anim.play(c.jumpStart); break;
       case 'attack': this.anim.play(c.attack); break;
-      case 'cast': this.anim.play(c.cast); break;
+      case 'cast':
+      case 'capture': this.anim.play(c.cast); break;
       case 'hurt': this.anim.play(c.hurt); break;
     }
     this.anim.update(dt, rate);

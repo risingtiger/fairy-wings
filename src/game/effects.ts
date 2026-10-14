@@ -91,6 +91,19 @@ export class Effects {
     this.orbs.push({ x: x + facing * 30, y, vx: facing * 720, age: 0, life: 1.0, seed: this.rng.range(0, 10) });
   }
 
+  /** She reaches out to catch a letter: a golden ring opening in front of her wand, and a sprinkle of sparkles. */
+  capture(x: number, y: number, facing: number): void {
+    const p = this.particles, s = p.spec;
+    for (const [size, life, color] of [[260, 0.45, rgba(255, 196, 80, 0.85)], [170, 0.32, rgba(255, 240, 200, 0.8)]] as const) {
+      s.reset();
+      s.x = x + facing * 60; s.y = y; s.vx = facing * 160;
+      s.life = life; s.size0 = 30; s.size1 = size;
+      s.color = color; s.shape = Shape.Ring; s.shapeParam = 0.12; s.blend = Blend.Alpha;
+      p.spawn();
+    }
+    this.sparkleBurst(x + facing * 60, y, 14, 360);
+  }
+
   /** A knock: a pop of light where it hit, stars flying off, and little stars circling her head for a moment. */
   hurt(x: number, y: number): void {
     const s = this.particles.spec;

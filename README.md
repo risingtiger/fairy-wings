@@ -18,7 +18,8 @@ Open http://localhost:5173 in a browser with WebGPU: recent Chrome or Edge, or S
 | ↓ / S | crouch |
 | Space / ↑ / W | jump (hold for higher) · under the word, puts the letter in |
 | U | talk to the elf |
-| J / Z | wave the wand · catches a hiding letter |
+| J / Z | wave the wand · knocks a walking letter off the screen |
+| L | catch the missing letter |
 | K / X | cast a spell |
 | H | get hurt (demo) |
 | E / C | switch wings / put them away (once found) |
@@ -27,7 +28,7 @@ Open http://localhost:5173 in a browser with WebGPU: recent Chrome or Edge, or S
 | ? | show/hide controls |
 | ` | performance stats |
 
-Gamepads use the standard mapping: stick to move, A jump, Y talk (U), X wand (J), B cast, LB wings, RB run.
+Gamepads use the standard mapping: stick to move, A jump, Y catch (L), X wand (J), B cast, LB wings, RB run.
 
 **The story.** The fairy wants to earn her wings. The elf boy next to the start tells her she needs ten stars. Each round he shows a word with one letter missing (CAT, SUN, DOG, …); the gap shows the missing letter as a dotted outline, like a tracing sheet. The missing letter bursts out of the elf as a flurry of little lights, swirls up into its shape over his head, and flies off screen, left or right, to hide. It finds the leafiest spot near its round's place on the meadow, sometimes up where she has to jump, and takes on the colours of the leaves behind it, so it is still a letter but hard to see. Nothing gives it away as she walks past. Standing in front of it, she waves her wand (J) to catch it: it lights up, bursts apart and flocks back together beside the star sidekick, following it like a little school of fish. Under the word she jumps, and the letter flies up into its place. The word reads itself out letter by letter, a star pops out, and the sidekick rounds it up into the line of stars trailing behind it. Ten stars bring the Purple Wings floating down to her, and she puts them on.
 
