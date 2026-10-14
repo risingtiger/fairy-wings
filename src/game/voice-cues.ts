@@ -13,7 +13,7 @@ export class VoiceCues {
 
   /** Call after the scene's update. */
   update(): void {
-    // the first time she comes up to the elf (he turns and waves), he says hello: once per session
-    if (this.scene.elf.greeting) this.voice.playOnce('elf-hello-crystal');
+    // the first time she reaches the elf, he says hello before tossing her first word: once per session
+    if (this.scene.quest.phase === 'hello') this.voice.playOnce('elf-hello-crystal');
   }
 }

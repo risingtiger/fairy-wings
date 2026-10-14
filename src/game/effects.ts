@@ -1,12 +1,15 @@
 import { Rng } from '../engine/core/math';
 import { ParticleSystem } from '../engine/fx/particles';
-import { Blend, rgba, Shape, type SpriteRenderer } from '../engine/render/sprite-renderer';
+import { Blend, hsla, rgba, Shape, type SpriteRenderer } from '../engine/render/sprite-renderer';
 
 /** Saturated magic colours, drawn with normal blending so they read against the bright sky. */
 const MAGIC = [rgba(244, 84, 206), rgba(150, 82, 240), rgba(255, 128, 222), rgba(86, 136, 255)];
 /** Pale highlights, drawn additively on top for the glow. */
 const SHINE = [rgba(255, 220, 250), rgba(235, 215, 255), rgba(255, 255, 255)];
 const DUST = rgba(236, 226, 205, 0.55);
+const TAU = Math.PI * 2;
+/** Seconds the little stars circle her head after a knock. */
+const DIZZY_TIME = 1.3;
 
 interface Orb { x: number; y: number; vx: number; age: number; life: number; seed: number }
 interface Mote { x: number; y: number; phase: number; speed: number; size: number; color: number }
@@ -19,6 +22,9 @@ export class Effects {
   private readonly motes: Mote[] = [];
   private time = 0;
   private motesPlaced = false;
+  /** The cartoon stars circling her head after a knock: seconds left, and where her head is. */
+  private dizzy = 0;
+  private readonly head = { x: 0, y: 0 };
 
   constructor(moteCount = 46) {
     for (let i = 0; i < moteCount; i++) {
@@ -85,20 +91,154 @@ export class Effects {
     this.orbs.push({ x: x + facing * 30, y, vx: facing * 720, age: 0, life: 1.0, seed: this.rng.range(0, 10) });
   }
 
+  /** A knock: a pop of light where it hit, stars flying off, and little stars circling her head for a moment. */
   hurt(x: number, y: number): void {
     const s = this.particles.spec;
-    for (let i = 0; i < 7; i++) {
-      const a = -Math.PI / 2 + this.rng.range(-1.1, 1.1);
+    for (const [size, life, color, blend] of [[300, 0.35, rgba(255, 120, 170, 0.85), Blend.Alpha], [200, 0.25, rgba(255, 250, 230, 0.9), Blend.Additive]] as const) {
+      s.reset();
+      s.x = x; s.y = y; s.life = life; s.size0 = 40; s.size1 = size;
+      s.color = color; s.shape = Shape.Ring; s.shapeParam = 0.12; s.blend = blend;
+      this.particles.spawn();
+    }
+    s.reset();
+    s.x = x; s.y = y; s.life = 0.22; s.size0 = 260; s.size1 = 90;
+    s.color = rgba(255, 245, 220, 0.85); s.shape = Shape.Glow; s.shapeParam = 0.6;
+    this.particles.spawn();
+    for (let i = 0; i < 12; i++) {
+      const a = -Math.PI / 2 + this.rng.range(-1.4, 1.4);
       s.reset();
       s.x = x; s.y = y;
-      s.vx = Math.cos(a) * this.rng.range(160, 320); s.vy = Math.sin(a) * this.rng.range(200, 380);
-      s.gravity = 700; s.life = this.rng.range(0.5, 0.75);
-      s.size0 = 60; s.size1 = 34; s.spin = this.rng.range(-6, 6);
-      s.color = rgba(255, 228, 120); s.shape = Shape.Sparkle;
+      s.vx = Math.cos(a) * this.rng.range(200, 420); s.vy = Math.sin(a) * this.rng.range(240, 460);
+      s.gravity = 900; s.life = this.rng.range(0.55, 0.85);
+      s.size0 = this.rng.range(46, 70); s.size1 = 24; s.spin = this.rng.range(-8, 8);
+      s.color = i % 3 ? rgba(255, 220, 90) : rgba(255, 150, 200); s.shape = Shape.Sparkle; s.blend = Blend.Alpha;
+      this.particles.spawn();
+    }
+    this.dizzy = DIZZY_TIME;
+  }
+
+  /** Where her head is now (the circling stars follow it). */
+  headAt(x: number, y: number): void { this.head.x = x; this.head.y = y; }
+
+  /** The elf tosses up a new word: a puff of light from his hand and a fountain of sparkles and streamers shooting up. */
+  toss(x: number, y: number): void {
+    const s = this.particles.spec, r = this.rng;
+    s.reset();
+    s.x = x; s.y = y; s.life = 0.4; s.size0 = 340; s.size1 = 120;
+    s.color = rgba(255, 225, 250, 0.8); s.shape = Shape.Glow; s.shapeParam = 0.5;
+    this.particles.spawn();
+    for (const [size, life, color] of [[380, 0.6, rgba(236, 80, 200, 0.8)], [260, 0.45, rgba(255, 196, 80, 0.85)]] as const) {
+      s.reset();
+      s.x = x; s.y = y; s.life = life; s.size0 = 40; s.size1 = size;
+      s.color = color; s.shape = Shape.Ring; s.shapeParam = 0.1; s.blend = Blend.Alpha;
+      this.particles.spawn();
+    }
+    for (let i = 0; i < 16; i++) { // streamers
+      const a = -Math.PI / 2 + r.range(-0.55, 0.55), v = r.range(900, 1500);
+      s.reset();
+      s.x = x; s.y = y; s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v;
+      s.drag = 2.2; s.gravity = 500; s.life = r.range(0.5, 0.8); s.size0 = 30; s.size1 = 10; s.stretch = 0.05;
+      s.color = hsla(r.next(), 0.95, 0.62); s.shape = Shape.Glow; s.shapeParam = 1; s.blend = Blend.Alpha;
+      this.particles.spawn();
+    }
+    for (let i = 0; i < 28; i++) { // a fountain of sparkles that rains back down
+      const a = -Math.PI / 2 + r.range(-0.9, 0.9), v = r.range(300, 900), shine = i % 3 === 0;
+      s.reset();
+      s.x = x; s.y = y; s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v;
+      s.drag = 1.2; s.gravity = 900; s.life = r.range(0.7, 1.2); s.size0 = r.range(40, 66); s.size1 = 12; s.spin = r.range(-6, 6);
+      s.color = shine ? SHINE[i % SHINE.length] : hsla(r.next(), 0.9, 0.65);
+      s.shape = Shape.Sparkle; s.blend = shine ? Blend.Additive : Blend.Alpha;
       this.particles.spawn();
     }
   }
 
+  /** She bounced on a letter: a squashed puff, a ring and sparkles squirting out sideways. */
+  stomp(x: number, y: number): void {
+    const s = this.particles.spec, r = this.rng;
+    this.dust(x, y, 8, 260, 0.6);
+    s.reset();
+    s.x = x; s.y = y; s.life = 0.35; s.size0 = 60; s.size1 = 300;
+    s.color = rgba(255, 245, 255, 0.85); s.shape = Shape.Ring; s.shapeParam = 0.14; s.blend = Blend.Alpha;
+    this.particles.spawn();
+    for (let i = 0; i < 16; i++) {
+      const side = i % 2 ? 1 : -1, a = side > 0 ? r.range(-0.7, 0.1) : Math.PI + r.range(-0.1, 0.7), v = r.range(300, 700), shine = i % 4 === 0;
+      s.reset();
+      s.x = x + side * 20; s.y = y; s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v;
+      s.drag = 2.5; s.gravity = 700; s.life = r.range(0.4, 0.7); s.size0 = r.range(36, 56); s.size1 = 10; s.spin = r.range(-8, 8);
+      s.color = shine ? SHINE[i % SHINE.length] : MAGIC[i % MAGIC.length];
+      s.shape = Shape.Sparkle; s.blend = shine ? Blend.Additive : Blend.Alpha;
+      this.particles.spawn();
+    }
+  }
+
+  /** A wrong letter she hit with her wand crackles back at her: a fizz of sparks toward `dir`. */
+  zap(x: number, y: number, dir: number): void {
+    const s = this.particles.spec, r = this.rng;
+    s.reset();
+    s.x = x; s.y = y; s.life = 0.3; s.size0 = 50; s.size1 = 240;
+    s.color = rgba(150, 82, 240, 0.85); s.shape = Shape.Ring; s.shapeParam = 0.12; s.blend = Blend.Alpha;
+    this.particles.spawn();
+    for (let i = 0; i < 14; i++) {
+      const a = (dir > 0 ? 0 : Math.PI) + r.range(-0.8, 0.8), v = r.range(400, 900);
+      s.reset();
+      s.x = x; s.y = y + r.range(-30, 30); s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v;
+      s.drag = 5; s.life = r.range(0.2, 0.35); s.size0 = 26; s.size1 = 8; s.stretch = 0.04;
+      s.color = i % 3 ? rgba(176, 110, 255) : rgba(240, 225, 255); s.shape = Shape.Glow; s.shapeParam = 1;
+      s.blend = i % 3 ? Blend.Alpha : Blend.Additive;
+      this.particles.spawn();
+    }
+  }
+
+  /** The right letter, caught: rainbow rings, confetti sparkles and hearts floating up. */
+  collect(x: number, y: number): void {
+    const s = this.particles.spec, r = this.rng;
+    for (let i = 0; i < 3; i++) {
+      s.reset();
+      s.x = x; s.y = y; s.life = 0.6 + i * 0.15; s.size0 = 40; s.size1 = 340 + i * 130;
+      s.color = hsla(0.9 - i * 0.17, 0.95, 0.62, 0.85); s.shape = Shape.Ring; s.shapeParam = 0.08; s.blend = Blend.Alpha;
+      this.particles.spawn();
+    }
+    s.reset();
+    s.x = x; s.y = y; s.life = 0.5; s.size0 = 460; s.size1 = 160;
+    s.color = rgba(255, 236, 250, 0.85); s.shape = Shape.Glow; s.shapeParam = 0.5;
+    this.particles.spawn();
+    for (let i = 0; i < 40; i++) {
+      const a = r.range(0, TAU), v = r.range(250, 850), shine = i % 4 === 0;
+      s.reset();
+      s.x = x; s.y = y; s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v - 250;
+      s.drag = 2; s.gravity = 600; s.life = r.range(0.7, 1.2); s.size0 = r.range(40, 64); s.size1 = 12; s.spin = r.range(-8, 8);
+      s.color = shine ? rgba(255, 255, 250) : hsla(i / 40, 0.95, 0.62);
+      s.shape = Shape.Sparkle; s.blend = shine ? Blend.Additive : Blend.Alpha;
+      this.particles.spawn();
+    }
+    this.hearts(x, y, 7);
+  }
+
+  /** The elf hands her a star: a golden flash, a rainbow ring, a fountain of gold glitter and a few hearts. */
+  starGift(x: number, y: number): void {
+    const s = this.particles.spec, r = this.rng;
+    s.reset();
+    s.x = x; s.y = y; s.life = 0.55; s.size0 = 520; s.size1 = 180;
+    s.color = rgba(255, 220, 120, 0.85); s.shape = Shape.Glow; s.shapeParam = 0.4;
+    this.particles.spawn();
+    for (let i = 0; i < 4; i++) {
+      s.reset();
+      s.x = x; s.y = y; s.life = 0.55 + i * 0.12; s.size0 = 30; s.size1 = 260 + i * 120;
+      s.color = i === 0 ? rgba(255, 210, 70, 0.9) : hsla(0.1 + i * 0.25, 0.95, 0.62, 0.8);
+      s.shape = Shape.Ring; s.shapeParam = 0.07; s.blend = Blend.Alpha;
+      this.particles.spawn();
+    }
+    for (let i = 0; i < 44; i++) {
+      const a = -Math.PI / 2 + r.range(-1.3, 1.3), v = r.range(250, 950), shine = i % 3 === 0;
+      s.reset();
+      s.x = x; s.y = y; s.vx = Math.cos(a) * v; s.vy = Math.sin(a) * v;
+      s.drag = 1.4; s.gravity = 800; s.life = r.range(0.8, 1.4); s.size0 = r.range(36, 64); s.size1 = 10; s.spin = r.range(-7, 7);
+      s.color = shine ? rgba(255, 252, 230) : hsla(r.range(0.1, 0.16), 1, 0.6);
+      s.shape = Shape.Sparkle; s.blend = shine ? Blend.Additive : Blend.Alpha;
+      this.particles.spawn();
+    }
+    this.hearts(x, y, 5);
+  }
   tookOff(x: number, y: number): void {
     const s = this.particles.spec;
     s.reset();
@@ -197,6 +337,7 @@ export class Effects {
 
   update(dt: number): void {
     this.time += dt;
+    this.dizzy = Math.max(0, this.dizzy - dt);
     const s = this.particles.spec;
     for (let i = this.orbs.length - 1; i >= 0; i--) {
       const o = this.orbs[i];
@@ -253,6 +394,19 @@ export class Effects {
       renderer.drawShape(Blend.Alpha);
     }
     this.particles.draw(renderer); // trails sit behind the orbs
+    if (this.dizzy > 0) { // little stars circling her head, on a tilted ring
+      const fade = Math.min(1, this.dizzy / 0.35), t = this.time;
+      for (let i = 0; i < 5; i++) {
+        const a = t * 7 + (i / 5) * TAU, near = Math.sin(a);
+        q.reset();
+        q.x = this.head.x + Math.cos(a) * 80; q.y = this.head.y + near * 22;
+        q.w = q.h = (40 + 12 * near) * fade;
+        q.rotation = t * 5 + i;
+        q.shape(Shape.Sparkle);
+        q.color = rgba(255, 226, 90, 0.95 * fade);
+        renderer.drawShape(Blend.Alpha);
+      }
+    }
     for (const o of this.orbs) {
       const pulse = 1 + Math.sin(o.age * 22) * 0.08;
       const fade = Math.min(1, (o.life - o.age) * 6);
@@ -277,6 +431,20 @@ export class Effects {
       q.shape(Shape.Sparkle);
       q.color = rgba(255, 255, 255, 0.9 * fade);
       renderer.drawShape(Blend.Additive);
+    }
+  }
+
+  /** Little hearts that pop out and float up, swaying. */
+  private hearts(x: number, y: number, count: number): void {
+    const s = this.particles.spec, r = this.rng;
+    for (let i = 0; i < count; i++) {
+      s.reset();
+      s.x = x + r.range(-50, 50); s.y = y + r.range(-30, 30);
+      s.vx = r.range(-260, 260); s.vy = -r.range(260, 520);
+      s.drag = 1.8; s.gravity = -40; s.life = r.range(1.1, 1.6); s.fadeOut = 0.35;
+      s.size0 = r.range(30, 44); s.size1 = r.range(54, 70); s.rotation = r.range(-0.35, 0.35); s.spin = r.range(-0.6, 0.6);
+      s.color = i % 2 ? rgba(255, 92, 170) : rgba(255, 140, 200); s.shape = Shape.Heart; s.blend = Blend.Alpha;
+      this.particles.spawn();
     }
   }
 

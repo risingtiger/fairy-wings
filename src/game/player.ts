@@ -33,6 +33,10 @@ export const PLAYER = {
   hurtTime: 0.6,
   hurtKnockback: 420,
   hurtHop: 560,
+  /** After a knock she can't be hurt again for this long (she flickers meanwhile). */
+  invulnerableTime: 1.6,
+  /** Upward speed when she bounces off something she jumped on (held jump keeps more of it). */
+  stompBounce: 980,
   // flight (needs wings)
   flySpeed: 470,
   flyFastSpeed: 820,
@@ -99,6 +103,8 @@ export class Player {
   idleTime = 0;
   /** -1 rising .. +1 diving while flying; drives flap speed. */
   flyEffort = 0;
+  /** Seconds left in which nothing can hurt her (after a knock). */
+  invulnerable = 0;
 
   private coyote = 0;
   /** Where a cutscene is floating her (world y of her feet), or null while she's free. */
@@ -144,12 +150,34 @@ export class Player {
   /** Hands the controls back; if she's in the air she falls (or flies) from there. */
   release(): void { this.liftTo = null; }
 
+  /**
+   * Something at `fromX` bumped into her: she's knocked back away from it and flickers for a moment,
+   * safe from more knocks. Returns false (and nothing happens) while she's still safe.
+   */
+  hurtBy(fromX: number): boolean {
+    if (this.invulnerable > 0 || this.state === 'hurt' || this.liftTo !== null) return false;
+    this.getHurt(this.x >= fromX ? 1 : -1);
+    return true;
+  }
+
+  /** She landed on top of something: a springy bounce up off it (higher if she keeps jump held). */
+  bounce(speed: number = PLAYER.stompBounce): void {
+    this.vy = -speed;
+    this.grounded = false;
+    this.flying = false;
+    this.coyote = 0;
+    this.jumpWasCut = false;
+    this.enter('jump');
+    this.squash.kick(-1.8);
+  }
+
   update(dt: number, input: Input<Action>, now: number): void {
     const P = PLAYER;
     this.prevX = this.x;
     this.prevY = this.y;
     this.time += dt;
     this.stateTime += dt;
+    this.invulnerable = Math.max(0, this.invulnerable - dt);
     const ability = this.flight;
     if (!ability) this.flying = false;
     else if (this.grounded || ability !== this.lastFlight) {
@@ -167,7 +195,7 @@ export class Player {
 
     // one-shot actions
     const busy = this.state === 'attack' || this.state === 'cast' || this.state === 'hurt';
-    if (input.take('hurt', now, P.actionBufferMs) && this.state !== 'hurt') this.getHurt();
+    if (input.take('hurt', now, P.actionBufferMs) && this.state !== 'hurt') this.getHurt(-this.facing);
     else if (!busy && input.take('attack', now, P.actionBufferMs)) { this.enter('attack'); this.idleTime = 0; }
     else if (!busy && input.take('cast', now, P.actionBufferMs)) { this.enter('cast'); this.idleTime = 0; }
 
@@ -315,8 +343,12 @@ export class Player {
     q.u0 = frame.u0; q.v0 = frame.v0; q.u1 = frame.u1; q.v1 = frame.v1;
     q.skew = p.skew;
     q.flash = p.flash;
+    if (this.flickering) q.color = rgba(255, 255, 255, 0.35);
     renderer.drawTexture(this.sheet.binding);
   }
+
+  /** Still safe after a knock: she blinks faint every other moment. */
+  get flickering(): boolean { return this.invulnerable > 0 && this.state !== 'hurt' && Math.floor(this.invulnerable * 14) % 2 === 0; }
 
   /** The sheet frame currently showing (for sockets). */
   get frame() { return this.sheet.frames[this.anim.frame]; }
@@ -378,11 +410,14 @@ export class Player {
     this.actionFired = false;
   }
 
-  private getHurt(): void {
+  /** Knocked back toward `away` (-1 left, 1 right), turned to face what hit her. */
+  private getHurt(away: number): void {
     this.enter('hurt');
     this.flying = false;
     this.idleTime = 0;
-    this.vx = -this.facing * PLAYER.hurtKnockback;
+    this.invulnerable = PLAYER.invulnerableTime;
+    this.facing = away > 0 ? -1 : 1;
+    this.vx = away * PLAYER.hurtKnockback;
     this.vy = -PLAYER.hurtHop;
     this.grounded = false;
     this.coyote = 0;

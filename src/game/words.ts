@@ -1,20 +1,18 @@
 /**
  * The words of the reading quest, easiest first; each one earns a star, and earning them all earns
- * her wings (five for now). Each round's missing letter flies off to hide near hideX, down low wherever
- * the leaves there hide it best (see QUEST.hideTop); the spots alternate sides and get further away.
+ * her wings (five for now). `missing` is the letter she has to remember and go and catch.
  */
 export interface Round {
   word: string;
   missing: number;
-  hideX: number;
 }
 
 export const ROUNDS: readonly Round[] = [
-  { word: 'CAT', missing: 0, hideX: -1100 },
-  { word: 'SUN', missing: 0, hideX: 1600 },
-  { word: 'DOG', missing: 0, hideX: -1900 },
-  { word: 'HAT', missing: 0, hideX: 2300 },
-  { word: 'PIG', missing: 0, hideX: -2700 },
+  { word: 'CAT', missing: 0 },
+  { word: 'SUN', missing: 0 },
+  { word: 'DOG', missing: 0 },
+  { word: 'HAT', missing: 0 },
+  { word: 'PIG', missing: 0 },
 ];
 
 /** How to say each letter's name, so speech engines never read "A" as "uh". */

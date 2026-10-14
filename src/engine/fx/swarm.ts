@@ -49,6 +49,8 @@ export class Swarm {
   flex = 1;
   /** Each particle wanders around its slot by about this much (world units). */
   jitter = 2;
+  /** Turns the formation around the anchor (radians, clockwise on screen); the flock swirls round into it. */
+  tilt = 0;
 
   private time = 0;
   private lastAX = 0;
@@ -97,6 +99,16 @@ export class Swarm {
     }
   }
 
+  /** Shifts every particle and the anchor by (dx, dy) without it counting as motion (moving the flock into another space). */
+  translate(dx: number, dy: number): void {
+    for (let i = 0; i < this.count; i++) {
+      this.x[i] += dx; this.px[i] += dx;
+      this.y[i] += dy; this.py[i] += dy;
+    }
+    this.anchorX += dx; this.lastAX += dx;
+    this.anchorY += dy; this.lastAY += dy;
+  }
+
   /** Copies the particles (not the controls) from a swarm holding the same formation. */
   copyParticles(from: Swarm): void {
     const n = (this.count = Math.min(from.count, this.capacity));
@@ -117,7 +129,7 @@ export class Swarm {
     const s = this.scale, wave = this.flex * s * (0.05 * Math.min(speed / 600, 1.5) + 0.06 * this.ripple);
     const followX = this.avx * (1 - this.trail), followY = this.avy * (1 - this.trail);
     const form = this.form, cloud = this.cloudRadius, turb = this.turbulence, jit = this.jitter;
-    const ax = this.anchorX, ay = this.anchorY;
+    const ax = this.anchorX, ay = this.anchorY, tc = Math.cos(this.tilt), ts = Math.sin(this.tilt), tilted = this.tilt !== 0;
 
     for (let i = 0; i < this.count; i++) {
       const sd = this.seed[i], s2 = fract(sd * 7.31 + 0.13), s3 = fract(sd * 13.7 + 0.71);
@@ -126,6 +138,7 @@ export class Swarm {
       const along = hx * dirX + hy * dirY, w = Math.sin(along * 6.5 - t * 8 + sd * 0.6) * wave;
       hx = hx * s - dirY * w + Math.cos(t * (1.7 + sd * 1.3) + sd * 40) * jit;
       hy = hy * s + dirX * w + Math.sin(t * (2.1 + s2) + sd * 17) * jit;
+      if (tilted) { const rx = hx * tc - hy * ts; hy = hx * ts + hy * tc; hx = rx; }
       // particles leave and rejoin the formation at different moments
       let f = (form - (1 - s3) * 0.45) / 0.55;
       f = f <= 0 ? 0 : f >= 1 ? 1 : f * f * (3 - 2 * f);

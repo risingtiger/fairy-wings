@@ -2,13 +2,13 @@ import type { SoundBank } from '../engine/audio/sound';
 import { clamp, Damped, lerp } from '../engine/core/math';
 import type { Input } from '../engine/input/input';
 import { ParallaxBackground } from '../engine/render/parallax';
-import { rgba, type SpriteRenderer } from '../engine/render/sprite-renderer';
+import { Blend, rgba, Shape, type SpriteRenderer } from '../engine/render/sprite-renderer';
 import type { IntroAssets } from './assets';
 import type { Action } from './controls';
 import { Effects } from './effects';
 import { Npc, type NpcOptions } from './npc';
 import { Player, PLAYER, type PlayerEvents } from './player';
-import { QUEST, ReadingQuest, type QuestScenery } from './quest';
+import { ReadingQuest, type QuestView } from './quest';
 import type { SoundName } from './sounds';
 import { Star } from './star';
 import { WingCeremony } from './wing-ceremony';
@@ -22,18 +22,26 @@ const REST_Y = -335;
 /** Sky colour at the top of the sky art; also the clear colour. */
 const SKY = { r: 30 / 255, g: 148 / 255, b: 251 / 255, a: 1 };
 export const SKY_TOP: GPUColor = SKY;
-/** Background layers from this one up are the near scenery (forest, ground), where letters can hide. */
-const NEAR_LAYERS = 2;
 /**
  * Both pairs of wings float over the start, just higher than she can jump (her head tops out around
- * y = -560). They're locked: earning every star brings the purple pair down to her.
+ * y = -560). They're locked: earning every star brings the purple pair flying to her, wherever she is.
  */
 const CHARMS: { id: WingId; x: number; y: number }[] = [
-  { id: 'purple', x: QUEST.signX - 30, y: -740 },
+  { id: 'purple', x: 270, y: -740 },
   { id: 'rainbow', x: 760, y: -750 },
 ];
 /**
- * The elf boy stands just past the word, turning to watch her. On his own he ponders (finger to his
+ * The meadow goes on for ever to the right, but she can only go back one screen width from the
+ * furthest she's been: a soft wall of light trails behind her there.
+ */
+const WALL = {
+  /** How many screen widths behind her furthest point the wall stands. */
+  behind: 1,
+  /** She sees the wall's shimmer once she's within this many units of it. */
+  showWithin: 700,
+} as const;
+/**
+ * The elf boy stands a little way along the meadow, turning to watch her. On his own he ponders (finger to his
  * chin), reads his book or smiles with his eyes closed, taking his time over each; he waves for a few
  * seconds when she comes near (see the quest).
  */
@@ -69,24 +77,11 @@ export class IntroScene implements PlayerEvents {
   private prevCamX = 0;
   private prevCamY = REST_Y;
   private viewWidth = VIEW_HEIGHT * (16 / 9);
-  private readonly sampled = { r: 0, g: 0, b: 0, a: 0 };
   private firstFlight = true;
-  /** What the hidden letters blend into: the background art, as the camera shows it. */
-  private readonly scenery: QuestScenery = {
-    colorBehind: (x, y, out) => {
-      const s = this.background.sample(x, y, this.camX.value, this.camY.value, this.sampled), sky = 1 - s.a;
-      out.r = (s.r + SKY.r * sky) * 255;
-      out.g = (s.g + SKY.g * sky) * 255;
-      out.b = (s.b + SKY.b * sky) * 255;
-    },
-    leafiness: (x, y) => {
-      // the near scenery as seen with her standing there; greener counts for more than flowers and stone
-      const s = this.background.sample(x, y, x, REST_Y, this.sampled, NEAR_LAYERS);
-      if (s.a <= 0.01) return 0;
-      const green = clamp(((s.g - Math.max(s.r, s.b)) / s.a) * 4 + 0.3, 0, 1);
-      return s.a * (0.4 + 0.6 * green);
-    },
-  };
+  /** The furthest right she's been; the left wall trails it by a screen width. */
+  private furthest = 0;
+  private time = 0;
+  private readonly view: QuestView = { x: 0, y: 0, width: 0, height: VIEW_HEIGHT, wallX: -Infinity };
 
   constructor(assets: IntroAssets, private readonly ui: SceneEvents) {
     const haze = (amount: number) => rgba(170, 205, 245, amount);
@@ -106,15 +101,17 @@ export class IntroScene implements PlayerEvents {
     this.elf = new Npc(assets.elf, ELF, assets.elfMoves);
     this.charms = CHARMS.map((c) => new WingCharm(WING_STYLES[c.id], sheets[c.id], c.x, c.y, (charm) => this.earnWings(charm)));
     for (const charm of this.charms) charm.locked = true;
-    this.quest = new ReadingQuest(this.player, this.star, this.elf, this.effects, this.scenery, {
+    this.quest = new ReadingQuest(this.player, this.star, this.elf, this.effects, this.sounds, {
       starsChanged: (count) => ui.starsChanged(count),
       wingsEarned: (done) => {
         const charm = this.charms.find((c) => c.style.id === 'purple');
-        if (charm) this.ceremony.start(charm, done);
-        else done();
+        if (!charm) { done(); return; }
+        // the wings were left far behind at the start: they come swooping in from the top left to her
+        if (Math.abs(charm.x - this.player.x) > this.viewWidth * 0.4) charm.flyIn(this.camX.value - this.viewWidth * 0.6, this.camY.value - VIEW_HEIGHT * 0.7);
+        this.ceremony.start(charm, done);
       },
-    });
-    this.ceremony = new WingCeremony(this.player, this.wings, this.star, this.quest.starOrbs);
+    }, VIEW_HEIGHT);
+    this.ceremony = new WingCeremony(this.player, this.wings, this.star, this.quest.starOrbs, this.sounds);
   }
 
   update(dt: number, now: number, input: Input<Action>): void {
@@ -123,11 +120,19 @@ export class IntroScene implements PlayerEvents {
     if (!this.ceremony.busy && input.take('wings', now, 150)) this.cycleWings();
     p.flight = this.wings.flight;
     p.update(dt, input, now);
+    this.time += dt;
+    // the left wall: never more than a screen width back from the furthest she's been
+    this.furthest = Math.max(this.furthest, p.x);
+    const wallX = this.furthest - this.viewWidth * WALL.behind;
+    if (p.x < wallX) { p.x = wallX; p.vx = Math.max(0, p.vx); }
     this.wings.update(dt, p);
     this.star.update(dt, p);
     this.elf.update(dt);
-    this.quest.update(dt, now, input, this.viewWidth);
+    const v = this.view;
+    v.x = this.camX.value; v.y = this.camY.value; v.width = this.viewWidth; v.wallX = wallX;
+    this.quest.update(dt, now, v);
     for (const charm of this.charms) charm.update(dt, p);
+    this.effects.headAt(p.x, p.y - 330);
     this.effects.update(dt);
 
     this.prevCamX = this.camX.value;
@@ -167,8 +172,40 @@ export class IntroScene implements PlayerEvents {
     this.wings.draw(renderer, this.player, pose.flash);
     this.player.drawBody(renderer);
     this.quest.drawFront(renderer, alpha);
+    this.drawWall(renderer, cx, cy);
     this.effects.draw(renderer);
     this.ceremony.drawFront(renderer, alpha, cx, cy, this.viewWidth, VIEW_HEIGHT);
+    // the word is pinned to the screen, over everything
+    renderer.setView(0, 0, this.viewWidth, VIEW_HEIGHT);
+    this.quest.drawScreen(renderer, alpha);
+  }
+
+  /** The left wall, as a soft curtain of light with sparkles drifting up it, once she's near enough to see it. */
+  private drawWall(renderer: SpriteRenderer, camX: number, camY: number): void {
+    const x = this.furthest - this.viewWidth * WALL.behind;
+    const near = clamp(1 - (this.player.x - x) / WALL.showWithin, 0, 1);
+    if (near <= 0.01 || x < camX - this.viewWidth / 2 - 200) return;
+    const q = renderer.quad, t = this.time;
+    q.reset();
+    q.x = x - 40; q.y = camY; q.w = 260; q.h = VIEW_HEIGHT * 1.4;
+    q.shape(Shape.Glow, 0.2);
+    q.color = rgba(236, 120, 230, 0.32 * near);
+    renderer.drawShape(Blend.Alpha);
+    q.reset();
+    q.x = x - 10; q.y = camY; q.w = 70; q.h = VIEW_HEIGHT * 1.3;
+    q.shape(Shape.Glow, 0.5);
+    q.color = rgba(255, 235, 255, 0.4 * near);
+    renderer.drawShape(Blend.Additive);
+    for (let i = 0; i < 14; i++) {
+      const u = (t * (0.12 + (i % 5) * 0.02) + i * 0.137) % 1, tw = 0.5 + 0.5 * Math.sin(t * 4 + i * 2.3);
+      q.reset();
+      q.x = x - 20 + Math.sin(t * 1.3 + i * 1.9) * 30; q.y = camY + VIEW_HEIGHT * (0.55 - u * 1.1);
+      q.w = q.h = (22 + 20 * tw) * near;
+      q.rotation = t * 2 + i;
+      q.shape(Shape.Sparkle);
+      q.color = rgba(255, 240, 255, 0.85 * near);
+      renderer.drawShape(Blend.Additive);
+    }
   }
 
   // --- wings ---------------------------------------------------------------------
@@ -202,25 +239,30 @@ export class IntroScene implements PlayerEvents {
 
   // --- player events: effects and sounds first, then the star reacts ----------------
 
-  jumped(x: number, y: number): void { this.effects.jumped(x, y); this.sounds.play('jump'); this.quest.jumped(); }
+  jumped(x: number, y: number): void { this.effects.jumped(x, y); this.sounds.play('jump'); }
   landed(x: number, y: number, impact: number): void {
     this.effects.landed(x, y, impact);
     // a full jump lands at ~1550 units/s, a tap ~900, a fall from flight 1900; a hovering touchdown barely moves
     const hard = clamp((impact - 150) / 1750, 0, 1);
-    this.sounds.play('step', 0.45 + 0.55 * hard);
+    this.sounds.play('landStep', 0.45 + 0.55 * hard);
     this.sounds.play('land', hard, 1.1 - 0.2 * hard);
   }
   stepped(x: number, y: number, facing: number, running: boolean): void {
     this.effects.stepped(x, y, facing, running);
-    this.sounds.play('step', running ? 1 : 0.65);
+    this.sounds.play(running ? 'run' : 'step');
   }
   attacked(x: number, y: number, facing: number): void {
     this.effects.attacked(x, y, facing);
+    this.sounds.play('attack');
     this.star.react('twinkle', 0.5);
-    this.quest.attacked(facing); // the wand catches a hidden letter
+    this.quest.attacked(facing); // the wand catches the right letter (a wrong one knocks her back)
   }
   cast(x: number, y: number, facing: number): void { this.effects.cast(x, y, facing); this.star.react('cheer', 0.8); }
-  hurt(x: number, y: number): void { this.effects.hurt(x, y); this.star.react('ouch', 0.9); }
+  hurt(x: number, y: number): void {
+    this.effects.hurt(x, y);
+    this.sounds.play('hurt');
+    this.star.react('ouch', 0.9);
+  }
   tookOff(x: number, y: number): void {
     this.effects.tookOff(x, y);
     if (this.firstFlight) { this.firstFlight = false; this.star.react('cheer', 1); }

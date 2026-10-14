@@ -109,14 +109,13 @@ export class Hud {
       <ul>
         ${row(['←', '→'], 'walk')}
         ${row(['Shift'], 'hold to run')}
-        ${row(['Space'], 'jump · hold for higher · under the word: put the letter in')}
-        ${row(['U'], 'talk to the elf')}
-        ${row(['J'], 'wave your wand · catch a hiding letter')}
+        ${row(['Space'], 'jump · hold for higher · land on a wrong letter to bounce it away')}
+        ${row(['J'], 'wave your wand · catch the missing letter')}
         ${row(['E'], 'put wings on or away (once earned)')}
         ${row(['M'], 'all sound on or off')}
         ${row(['N'], 'music on or off')}
       </ul>
-      <p class="muted">Talk to the elf to start. Each word's missing letter flies off and hides in the leaves: find it, catch it with your wand, and jump under the word to put it back. Every word earns a star, and ${s.starGoal} stars earn the Purple Wings.<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y talk, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+      <p class="muted">Walk up to the elf to get a word. Remember the golden letter before it floats away, then head right: letters come walking along. Catch the missing one with your wand (wrong ones bump you!), read the word out loud, and the elf brings you a star. ${s.starGoal} stars earn the Purple Wings.<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
     </section>`;
   }
 

@@ -64,7 +64,7 @@ export class Npc {
   private fade: number;
   private sinceChange: number;
   private time = 0;
-  private talk = 0;
+  private talkAmount = 0;
   private readonly settle = new Spring(170, 13);
   private readonly rng: Rng;
 
@@ -89,6 +89,9 @@ export class Npc {
 
   /** Name of the move playing, or null while it idles. */
   get moving(): string | null { return this.move?.name ?? null; }
+
+  /** Starts or stops it looking like it's talking (a happy little bounce per word). */
+  talk(on: boolean): void { this.talking = on; }
 
   /** Whether the moves sheet has a clip by this name. */
   canPlay(name: string): boolean { return this.moves?.clips.has(name) ?? false; }
@@ -137,7 +140,7 @@ export class Npc {
 
   update(dt: number): void {
     this.time += dt;
-    this.talk = clamp(this.talk + (this.talking ? dt : -dt) * 6, 0, 1);
+    this.talkAmount = clamp(this.talkAmount + (this.talking ? dt : -dt) * 6, 0, 1);
     this.sinceChange += dt;
     // one greeting each time `greeting` turns on; it has to turn off and on again to greet again
     if (this.greeting && !this.wasGreeting) this.greetLeft = this.options.greetFor ?? Infinity;
@@ -209,7 +212,7 @@ export class Npc {
     // breathing and the weight-shift dip are for standing; moves carry their own motion
     const idle = sheet === this.sheet;
     const s = idle ? this.settle.value : 0, breathe = idle ? Math.sin(this.time * 2.2) * 0.008 : 0;
-    const chatter = Math.abs(Math.sin(this.time * 8.5)) * this.talk; // a happy little bounce per word
+    const chatter = Math.abs(Math.sin(this.time * 8.5)) * this.talkAmount; // a happy little bounce per word
     q.x = this.x; q.y = this.y - chatter * 7;
     q.w = sheet.cellWidth * o.scale * (1 + s * 0.4) * this.facing;
     q.h = sheet.cellHeight * o.scale * (1 - s + breathe + chatter * 0.015);
