@@ -14,6 +14,8 @@ export class WingCharm {
   /** 0..1: the wings wake up: they flutter fast, shine, and the glow and sparkles grow. */
   excite = 0;
   private summoned = false;
+  /** Flying in to hover over her (until it's summoned down to her). */
+  private escorting = false;
   private flap = 0;
   private readonly fx: Damped;
   private readonly fy: Damped;
@@ -35,6 +37,17 @@ export class WingCharm {
 
   get currentY(): number { return this.y + Math.sin(this.time * 2) * 18; }
 
+  /**
+   * Swoops in from (fromX, fromY) to hover high over her, wherever she is, following her about;
+   * summon() then brings it down to her.
+   */
+  flyIn(fromX: number, fromY: number): void {
+    this.x = this.fx.value = fromX;
+    this.y = this.fy.value = fromY;
+    this.fx.velocity = this.fy.velocity = 0;
+    this.escorting = true;
+  }
+
   /** Spirals gently down to her; she gets the wings when it reaches her. */
   summon(): void { this.summoned = true; }
 
@@ -54,6 +67,10 @@ export class WingCharm {
       const far = clamp(Math.abs(player.y - 170 - this.y) / 450, 0, 1);
       this.x = this.fx.update(player.x + Math.sin(this.time * 2.1) * 110 * far, 0.7, dt);
       this.y = this.fy.update(player.y - 170, 1.3, dt);
+    } else if (this.escorting) {
+      this.x = this.fx.update(player.x + 40, 0.8, dt);
+      this.y = this.fy.update(Math.min(player.y - 740, -740), 0.8, dt);
+      return;
     } else if (this.locked) return;
     const dx = player.x - this.x, dy = player.y - 150 - this.currentY; // her chest
     if (Math.abs(dx) < 150 && Math.abs(dy) < 190) {

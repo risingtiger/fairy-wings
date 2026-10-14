@@ -48,11 +48,6 @@ export class Star {
   private trailIn = 0;
   private shake = 0;
   private asleep = false;
-  private fetchTarget: { x: number; y: number } | null = null;
-  private fetchArrived: (() => void) | null = null;
-  private fetchTime = 0;
-  private hintDir = 0;
-  private hintReach = 190;
   private readonly pos = { x: 0, y: 0 };
   private chatterIn = 0;
   private readonly squash = new Spring(220, 12);
@@ -77,49 +72,22 @@ export class Star {
     if (frame === 'ouch') this.shake = 0.5;
   }
 
-  /** Flies off to (x, y), e.g. to round up a new star, calls `arrived` when it gets there, then comes back to her. */
-  fetch(x: number, y: number, arrived: () => void): void {
-    this.fetchTarget = { x, y };
-    this.fetchArrived = arrived;
-    this.fetchTime = 0;
-  }
-
-  /** Points the way: floats out `reach` units to her side toward `dir` (-1 or 1); 0 stops. */
-  hint(dir: number, reach = 190): void { this.hintDir = dir; this.hintReach = reach; }
-
   update(dt: number, player: Player): void {
     this.time += dt;
     this.prevX = this.x.value;
     this.prevY = this.y.value;
-    const target = this.fetchTarget;
-    this.asleep = !target && !this.hintDir && !this.talking && player.idleTime > STAR.sleepAfter && player.grounded && !this.reaction;
+    this.asleep = !this.talking && player.idleTime > STAR.sleepAfter && player.grounded && !this.reaction;
     const asleep = this.asleep;
-    if (target) {
-      this.fetchTime += dt;
-      this.x.update(target.x, 0.3, dt);
-      this.y.update(target.y, 0.3, dt);
-      if (Math.hypot(target.x - this.x.value, target.y - this.y.value) < 60 || this.fetchTime > 3) {
-        const arrived = this.fetchArrived;
-        this.fetchTarget = this.fetchArrived = null;
-        this.react('cheer', 0.9);
-        arrived?.();
-      }
-    } else if (this.hintDir) {
-      const tx = player.x + this.hintDir * this.hintReach;
-      this.x.update(tx, 0.5, dt);
-      this.y.update(this.clear(tx, player.y + STAR.offsetY + 20), STAR.followY, dt);
-    } else {
-      // follow a point behind her head; when asleep, settle on the grass beside her
-      const tx = player.x + (asleep ? -150 : STAR.offsetX) * player.facing;
-      const ty = asleep ? -70 : player.y + STAR.offsetY;
-      this.x.update(tx, asleep ? 1.2 : STAR.followX, dt);
-      this.y.update(this.clear(tx, ty), asleep ? 1.4 : STAR.followY, dt);
-    }
+    // follow a point behind her head; when asleep, settle on the grass beside her
+    const tx = player.x + (asleep ? -150 : STAR.offsetX) * player.facing;
+    const ty = asleep ? -70 : player.y + STAR.offsetY;
+    this.x.update(tx, asleep ? 1.2 : STAR.followX, dt);
+    this.y.update(this.clear(tx, ty), asleep ? 1.4 : STAR.followY, dt);
     this.vx = this.x.velocity;
     this.vy = this.y.velocity;
 
-    // face the way it's flying; when hovering, look toward her (or the way it's pointing)
-    const wantFace = Math.abs(this.vx) > 60 ? Math.sign(this.vx) : this.hintDir || Math.sign(player.x - this.x.value) || player.facing;
+    // face the way it's flying; when hovering, look toward her
+    const wantFace = Math.abs(this.vx) > 60 ? Math.sign(this.vx) : Math.sign(player.x - this.x.value) || player.facing;
     if (wantFace !== this.face) { this.face = wantFace as 1 | -1; this.squash.kick(2.5); }
 
     if (this.reaction) {
@@ -156,7 +124,6 @@ export class Star {
     const speed = Math.hypot(this.vx, this.vy);
     let frame: Frame;
     if (this.reaction) frame = this.reaction;
-    else if (this.hintDir && speed < 200) frame = Math.sin(this.time * 2.5) > 0 ? 'curious' : 'twinkle';
     else if (asleep) frame = 'sleep';
     else if (speed > STAR.dashSpeed) frame = 'dash';
     else if (this.blinkLeft > 0) frame = 'happy';

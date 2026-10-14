@@ -2,14 +2,12 @@ import { SpriteSheet } from '../engine/anim/sprite-sheet';
 import { SoundBank } from '../engine/audio/sound';
 import type { MipmapGenerator } from '../engine/gpu/mipmaps';
 import { createTexture, loadBitmap, loadTexture } from '../engine/gpu/texture';
-import { readPixels, type Pixels } from '../engine/render/pixels';
 import type { SpriteRenderer, TextureBinding } from '../engine/render/sprite-renderer';
 import { SOUNDS, type SoundName } from './sounds';
 
-/** A background layer: its texture, plus a small copy in memory for looking up what colour it shows where. */
+/** A background layer's texture. */
 export interface LayerArt {
   binding: TextureBinding;
-  pixels: Pixels;
 }
 
 export interface IntroAssets {
@@ -34,8 +32,7 @@ const base = import.meta.env.BASE_URL;
 export async function loadIntroAssets(device: GPUDevice, mips: MipmapGenerator, renderer: SpriteRenderer): Promise<IntroAssets> {
   const layer = async (name: string): Promise<LayerArt> => {
     const url = `${base}scenes/intro/${name}.png`, bitmap = await loadBitmap(url);
-    // a quarter-size copy is plenty for colour lookups (the hidden letters blend into it)
-    const art = { binding: renderer.bind(createTexture(device, mips, bitmap, url), { repeat: true }), pixels: readPixels(bitmap, 0.25) };
+    const art = { binding: renderer.bind(createTexture(device, mips, bitmap, url), { repeat: true }) };
     bitmap.close();
     return art;
   };

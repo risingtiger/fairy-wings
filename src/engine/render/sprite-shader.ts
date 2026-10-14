@@ -89,6 +89,17 @@ struct VOut {
       let w = mix(0.15, 1.0, along);
       a = pow(saturate(1.0 - abs(p.y) / w), 2.0 + k) * pow(1.0 - along, 1.3) * saturate(along * 8.0);
     }
+    case 7u: { // heart, point down; k softens the edge
+      let h = vec2f(abs(p.x), -p.y) * 0.62 + vec2f(0.0, 0.55);
+      var d = 0.0;
+      if (h.y + h.x > 1.0) {
+        d = length(h - vec2f(0.25, 0.75)) - 0.35355;
+      } else {
+        let m = vec2f(0.5 * max(h.x + h.y, 0.0));
+        d = sqrt(min(dot(h - vec2f(0.0, 1.0), h - vec2f(0.0, 1.0)), dot(h - m, h - m))) * sign(h.x - h.y);
+      }
+      a = 1.0 - smoothstep(-0.02 - k * 0.25, 0.02, d);
+    }
     default: {}
   }
   return vec4f(v.color.rgb, 1.0) * (v.color.a * a);

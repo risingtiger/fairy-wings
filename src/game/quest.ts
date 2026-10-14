@@ -1,57 +1,59 @@
+import { Rng } from '../engine/core/math';
 import type { Input } from '../engine/input/input';
-import { rgba, type SpriteRenderer } from '../engine/render/sprite-renderer';
-import { glyphWidth } from '../engine/text/stroke-font';
+import type { SpriteRenderer } from '../engine/render/sprite-renderer';
 import type { Action } from './controls';
 import type { Effects } from './effects';
-import { drawPrompt, drawTurnHint, RUNAWAY, RunawayLetter, WordSign } from './letters';
+import { LetterWalker, type Behaviour } from './letter-walker';
+import { WordSign } from './letters';
 import type { Npc } from './npc';
-import type { Scenery } from './orb-letter';
 import type { Player } from './player';
 import type { Star } from './star';
 import { StarOrbs } from './star-orbs';
-import { ROUNDS, type Round } from './words';
+import { ROUNDS } from './words';
 
 export const QUEST = {
-  /** The word floats between her start and the elf, well above her head (the star keeps below it). */
-  signX: 300,
-  signY: -520,
-  letterHeight: 112,
-  talkRange: 200,
+  /**
+   * The word is pinned to the screen: centred across it, this far below the top edge (world units at
+   * the 1080-tall view), just under the HUD's row of stars.
+   */
+  wordFromTop: 190,
+  letterHeight: 100,
+  /** She's reached the elf: this close, she gets her word. */
+  talkRange: 230,
   /** The elf waves once she's this close (and stops when she's back past `greetLeave`). */
   greetRange: 420,
   greetLeave: 520,
-  /** Seconds the new letter swirls over the elf, so she can see which one it is, before it flies off. */
-  showFor: 3.6,
-  /** Seconds of searching before the star starts pointing the way. */
-  hintAfter: 25,
-  /** Seconds of searching before the star makes the letter twinkle, once she's close. */
-  shimmerAfter: 35,
-  /** She ran past the hidden letter: once she's this many screen widths beyond it, the star hangs back toward it. */
-  turnAround: 1,
   /**
-   * The grown-up check. Once the letter is in the word, the game quietly waits (nothing on screen
-   * says so) until a grown-up has heard the child read the word aloud and types this on the
-   * keyboard; only then does the word celebrate and the star come out.
+   * The first time she reaches him, the elf says hello (his voice-over line) before tossing the first
+   * word up: seconds he talks for.
+   */
+  helloFor: 10.5,
+  /** Seconds the new word's missing letter glows gold, for her to remember, before it floats away. */
+  memorise: 3,
+  /**
+   * The grown-up check. Once the letter is back in the word, the game quietly waits (nothing on
+   * screen says so) until a grown-up has heard the child read the word aloud and types this on the
+   * keyboard; only then does the word celebrate and the elf bring her star.
    */
   grownUpWord: 'ok',
-  /** How far either side of a round's planned spot the letter looks for the leafiest place to hide. */
-  hideSearch: 480,
-  /**
-   * Heights (world y of the letter's centre) it may hide at: always down low in the leaves just above
-   * the grass, where the scenery is leafiest and she can catch it standing.
-   */
-  hideTop: -140,
-  hideBottom: -95,
-  /** Where the caught letter flocks: beside the star, toward her. */
-  carryX: 100,
-  carryY: -55,
+  /** Gap between walking letters (world units), smallest..largest. They appear just past the right of the screen. */
+  spawnGap: [750, 1150] as const,
+  /** Wrong letters she meets before the right one, fewest..most (and again before it comes back, if she leaves it behind). */
+  keyAfter: [2, 3] as const,
+  maxWalkers: 6,
+  /** How far behind the left wall a letter goes before it's gone for good. */
+  cullBehind: 300,
+  /** Seconds the caught letter jumps for joy before it flies up into the word. */
+  cheerFor: 0.9,
+  /** The elf, bringing her star: his running speed, and where he stops (this far ahead of her). */
+  elfRunSpeed: 980,
+  elfStop: 290,
+  /** From his hand: how long the new star waits before it flies up to join the sidekick's swirl. */
+  starRise: 1.1,
 } as const;
 
-/** What the quest needs from the scene's scenery. */
-export interface QuestScenery extends Scenery {
-  /** How leafy the scenery behind (x, y) looks from where she'd stand to see it: 0 open sky .. 1 dense leaves. */
-  leafiness(x: number, y: number): number;
-}
+/** Letters the walkers can be (every glyph of the stroke font). */
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 export interface QuestEvents {
   starsChanged(count: number): void;
@@ -59,65 +61,79 @@ export interface QuestEvents {
   wingsEarned(done: () => void): void;
 }
 
-type Phase = 'greet' | 'show' | 'seek' | 'carry' | 'place' | 'confirm' | 'celebrate' | 'reward' | 'next' | 'wings' | 'free';
+/** Where the camera is and how much it shows, for things the quest places on or off screen. */
+export interface QuestView { x: number; y: number; width: number; height: number; wallX: number }
+
+type Phase =
+  | 'greet' | 'hello' | 'toss' | 'memorise' | 'vanish' | 'hunt' | 'caught' | 'flying' | 'confirm'
+  | 'elfRun' | 'give' | 'next' | 'wings' | 'free';
 
 /**
- * The reading quest, told without words for now (no speech bubbles or voice). She goes to the elf and
- * presses U; he shows a word with a letter missing, and the letter bursts
- * out of him as a flurry of lights and flies off to hide in the leaves somewhere along the meadow.
- * She finds it and catches it with her wand (attack); it flocks after the star while she carries it
- * back, and when she jumps under the word it flies up into its place. The word cheers, a star pops
- * out as a little light, and the sidekick rounds it up to swirl with the others. All of them earn her wings.
+ * The reading quest, told without words. She walks up to the elf; he tosses a word up, and it floats
+ * to the top of the screen and stays there. One letter glows gold for a moment, for her to remember,
+ * then melts into lights and floats away, leaving a gap. Off she goes to the right, where letters come
+ * walking along on little legs. The wrong ones bump her (or she can bounce on their heads and send
+ * them tumbling away); the right one she catches with her wand, and it jumps for joy and flies up
+ * into the gap. She reads the word aloud, a grown-up types "ok", and the elf comes running with a
+ * star, which flies up to swirl around the sidekick with the others. All of them earn her wings.
  */
 export class ReadingQuest {
   phase: Phase = 'greet';
   readonly sign: WordSign;
-  readonly letter = new RunawayLetter();
   readonly starOrbs = new StarOrbs();
+  readonly walkers: LetterWalker[] = [];
+  private readonly spare: LetterWalker[] = [];
   private round = 0;
   private phaseTime = 0;
-  private time = 0;
   /** The latest frame timestamp (ms), and when the wait for the grown-up's word began. */
   private now = 0;
   private confirmSince = 0;
-  private nearElf = false;
-  private nearSign = false;
-  private fetching = false;
-  private shimmerIn = 0;
-  /** She has run more than a screen past the hidden letter: the star hangs back, pointing at it. */
-  private turnAround = false;
-  private turnDir = 0;
+  private greeted = false;
+  private nextSpawnX = 0;
+  private wrongLeft = 0;
+  private walkerSeed = 1;
+  private caught: LetterWalker | null = null;
   private readonly signZone = { left: 0, right: 0, bottom: 0 };
-  private readonly hideAt = { x: 0, y: 0 };
-  private readonly follow = { x: 0, y: 0 };
+  private readonly view: QuestView = { x: 0, y: 0, width: 1920, height: 1080, wallX: -Infinity };
+  private readonly hand = { x: 0, y: 0 };
+  private readonly rng = new Rng(0x5eed);
 
   constructor(
     private readonly player: Player,
     private readonly star: Star,
     private readonly elf: Npc,
     private readonly effects: Effects,
-    private readonly scenery: QuestScenery,
     private readonly events: QuestEvents,
+    viewHeight: number,
   ) {
-    this.sign = new WordSign(QUEST.signX, QUEST.signY, QUEST.letterHeight);
+    this.sign = new WordSign(-viewHeight / 2 + QUEST.wordFromTop, QUEST.letterHeight);
   }
 
   get stars(): number { return this.starOrbs.count; }
   /** Stars needed for her wings: one per word. */
   get starGoal(): number { return ROUNDS.length; }
+  /** The letter she's looking for, while she's looking for it. */
+  get keyLetter(): string | null { return this.phase === 'hunt' ? ROUNDS[this.round].word[ROUNDS[this.round].missing] : null; }
 
-  /** She swung her wand (facing that way): standing in front of the hidden letter, that catches it. */
+  /**
+   * She swung her wand (facing that way). Right in front of the letter she needs, that catches it;
+   * a wrong letter crackles back and knocks her over.
+   */
   attacked(facing: number): void {
-    const l = this.letter;
-    if (this.phase !== 'seek' || !l.hiding) return;
-    const p = this.player, at = l.position;
-    const ahead = (at.x - p.x) * facing, dy = at.y - (p.y - 160); // from her chest
-    if (ahead < -l.halfWidth - 60 || ahead > l.halfWidth + 230 || Math.abs(dy) > l.halfHeight + 150) return;
-    l.catch();
-    this.star.hint(0);
-    this.effects.poof(at.x, at.y);
-    this.star.react('cheer', 1);
-    this.enter('carry');
+    if (this.phase !== 'hunt') return;
+    const p = this.player, chestY = p.y - 160;
+    let best: LetterWalker | null = null, bestAhead = Infinity;
+    for (const w of this.walkers) {
+      if (!w.active) continue;
+      const ahead = (w.x - p.x) * facing, dy = w.centerY - chestY;
+      if (ahead < -w.halfWidth - 50 || ahead > w.halfWidth + 220 || Math.abs(dy) > 200) continue;
+      if (ahead < bestAhead) { best = w; bestAhead = ahead; }
+    }
+    if (!best) return;
+    if (best.isKey) { this.catchLetter(best); return; }
+    best.bump(p.x);
+    this.effects.zap(best.centerX - facing * best.halfWidth, best.centerY, -facing);
+    p.hurtBy(best.x);
   }
 
   /**
@@ -130,89 +146,104 @@ export class ReadingQuest {
     this.cheer();
   }
 
-  /** She jumped: under the word, that sends the letter she carries up into its place. */
-  jumped(): void {
-    if (this.phase === 'carry' && this.nearSign && this.letter.carried) this.place();
-  }
-
-  /** `viewWidth` is how wide the screen is in world units (for "she ran a screen past it"). */
-  update(dt: number, now: number, input: Input<Action>, viewWidth: number): void {
-    const p = this.player;
+  /** `view` is where the camera is this step (and the left wall), for placing things on and off screen. */
+  update(dt: number, now: number, view: Readonly<QuestView>): void {
+    const p = this.player, elf = this.elf;
+    Object.assign(this.view, view);
     this.now = now;
-    this.time += dt;
     this.phaseTime += dt;
-    const use = input.take('use', now, 150);
-    this.nearElf = Math.abs(p.x - this.elf.x) < QUEST.talkRange && p.y > -260;
-    this.nearSign = this.sign.visible && Math.abs(p.x - this.sign.x) < this.sign.halfWidth + 130 && p.y > -420;
-    this.elf.lookAt(p.x);
+    const elfDistance = Math.abs(p.x - elf.x);
+    const nearElf = elfDistance < QUEST.talkRange && p.y > -260;
+    if (this.phase !== 'elfRun') elf.lookAt(p.x);
     // a little slack between starting and stopping, so he doesn't flicker in and out of the wave at the edge
-    const elfDistance = Math.abs(p.x - this.elf.x);
-    this.elf.greeting = elfDistance < (this.elf.greeting ? QUEST.greetLeave : QUEST.greetRange) && p.y > -500;
-    // the star never floats up in front of the word
+    elf.greeting = this.phase === 'greet' && elfDistance < (elf.greeting ? QUEST.greetLeave : QUEST.greetRange) && p.y > -500;
+    // the star never floats up in front of the word (the word is on the screen, so this follows the camera)
     const z = this.signZone;
-    z.left = this.sign.x - this.sign.halfWidth - 100; z.right = this.sign.x + this.sign.halfWidth + 100;
-    z.bottom = this.sign.y + QUEST.letterHeight / 2;
+    z.left = view.x - this.sign.halfWidth - 100; z.right = view.x + this.sign.halfWidth + 100;
+    z.bottom = view.y + this.sign.y + QUEST.letterHeight / 2;
     this.star.avoid = this.sign.visible ? z : null;
-    const wasTurning = this.turnAround;
-    this.turnAround = false;
 
     switch (this.phase) {
       case 'greet':
-        if (use && this.nearElf) this.startRound();
+        if (!nearElf) break;
+        if (!this.greeted) {
+          // she's reached the elf for the first time: he says hello before giving her the first word
+          this.greeted = true;
+          // VOICE(elf-hello-crystal)
+          elf.talk(true); // VOICE(speaking)
+          this.enter('hello');
+        } else this.toss();
         break;
-      case 'show':
-        if (this.phaseTime >= QUEST.showFor) {
-          this.letter.flyOff(this.hideAt.x, this.hideAt.y);
-          this.enter('seek');
+      case 'hello':
+        if (this.phaseTime >= QUEST.helloFor) {
+          elf.talk(false);
+          // if she wandered off meanwhile, the word waits until she comes back to him
+          if (elfDistance < QUEST.greetLeave) this.toss();
+          else this.enter('greet');
         }
         break;
-      case 'seek': {
-        // after a long search the star floats out ahead, pointing the way; once she's close, it makes the letter twinkle
-        const dx = this.hideAt.x - p.x, searching = this.phaseTime > QUEST.hintAfter;
-        // ran right past it (out beyond it, away from the elf) by more than a screen: the star hangs back, pointing at it
-        const beyond = Math.sign(-dx) === Math.sign(this.hideAt.x - QUEST.signX);
-        const far = viewWidth * QUEST.turnAround * (wasTurning ? 0.8 : 1); // lets go a little closer than it starts, so it doesn't flicker
-        this.turnAround = this.letter.hiding && beyond && Math.abs(dx) > far;
-        this.turnDir = Math.sign(dx);
-        const pointing = this.turnAround || (searching && Math.abs(dx) > 700);
-        this.star.hint(pointing ? Math.sign(dx) : 0, this.turnAround ? 330 : 190);
-        if (this.phaseTime > QUEST.shimmerAfter && !pointing && this.letter.hiding && Math.abs(dx) < 900 && (this.shimmerIn -= dt) <= 0) {
-          this.shimmerIn = 5;
-          this.letter.shimmer();
+      case 'toss':
+        if (this.sign.settled) this.enter('memorise');
+        break;
+      case 'memorise':
+        if (this.phaseTime >= QUEST.memorise) {
+          this.sign.release();
+          this.enter('vanish');
         }
         break;
-      }
-      case 'carry':
-        if (use && this.nearSign) this.place();
-        break;
-      case 'celebrate':
-        if (this.sign.celebrating >= this.sign.celebrationLength - 0.2) {
-          // it waits just past the end of the word, so the star never crosses the letters to fetch it
-          this.starOrbs.pop(this.sign.slotX, this.sign.y - 40, this.sign.x + this.sign.halfWidth + 150, this.sign.y);
-          this.effects.poof(this.sign.slotX, this.sign.y - 60);
-          this.fetching = false;
-          this.enter('reward');
+      case 'vanish':
+        if (this.sign.key === 'gone') {
+          this.nextSpawnX = view.x + view.width / 2 + 200;
+          this.wrongLeft = this.pick(QUEST.keyAfter[0], QUEST.keyAfter[1]);
+          this.enter('hunt');
         }
         break;
-      case 'reward': {
-        const waiting = this.starOrbs.waiting;
-        if (waiting && this.phaseTime > 0.6 && !this.fetching) {
-          this.fetching = true;
-          this.star.fetch(waiting.x, waiting.y, () => {
-            this.starOrbs.roundUp();
-            const s = this.star.position;
-            this.effects.poof(s.x, s.y);
-            this.events.starsChanged(this.starOrbs.count);
-            this.enter('next');
+      case 'hunt':
+        this.spawnAhead();
+        this.collide();
+        break;
+      case 'caught':
+        if (this.caught && this.caught.happyFor >= QUEST.cheerFor) {
+          const w = this.caught;
+          this.caught = null;
+          this.sign.receive(w.orbs, -view.x, -view.y, () => {
+            // in it goes, quietly: the celebration waits for the grown-up (see listen)
+            // SFX(slot)
+            this.confirmSince = this.now;
+            this.enter('confirm');
           });
+          this.retire(w);
+          this.enter('flying');
+        }
+        break;
+      case 'elfRun': {
+        // he runs in to just ahead of her, however far behind he was
+        const target = p.x + QUEST.elfStop, dx = target - elf.x;
+        if (Math.abs(dx) < 24) {
+          elf.stand();
+          elf.lookAt(p.x);
+          this.giveStar();
+        } else {
+          elf.facing = dx > 0 ? 1 : -1;
+          elf.x += Math.sign(dx) * Math.min(Math.abs(dx), QUEST.elfRunSpeed * dt);
         }
         break;
       }
+      case 'give':
+        if (this.phaseTime >= QUEST.starRise && this.starOrbs.waiting) {
+          this.starOrbs.roundUp();
+          this.star.react('cheer', 1.2);
+          this.events.starsChanged(this.starOrbs.count);
+        }
+        if (this.phaseTime >= QUEST.starRise + 1.4) {
+          this.sign.hide();
+          this.enter('next');
+        }
+        break;
       case 'next':
-        if (this.phaseTime > 1.6) this.sign.hide();
-        if (this.phaseTime > 2.3) {
+        if (this.phaseTime > 0.7) {
           this.round++;
-          if (this.round < ROUNDS.length) this.startRound();
+          if (this.round < ROUNDS.length) this.enter('greet'); // he's just ahead of her: she walks up to him for the next word
           else {
             this.enter('wings');
             this.events.wingsEarned(() => this.enter('free'));
@@ -221,87 +252,162 @@ export class ReadingQuest {
         break;
     }
 
+    for (let i = this.walkers.length - 1; i >= 0; i--) {
+      const w = this.walkers[i];
+      w.update(dt);
+      if (w.fallenOut) this.retire(w);
+    }
     this.sign.update(dt);
     const s = this.star.position;
-    this.follow.x = s.x + p.facing * QUEST.carryX;
-    this.follow.y = s.y + QUEST.carryY;
-    this.letter.update(dt, this.follow, this.scenery);
     this.starOrbs.update(dt, s.x, s.y);
   }
 
-  /** The word and the hidden letter: scenery, behind the characters. */
+  /** The walking letters: scenery-level, behind the elf, the sidekick and her. */
   drawWorld(renderer: SpriteRenderer, alpha: number): void {
-    this.sign.draw(renderer, alpha);
-    this.letter.draw(renderer, alpha, 'world');
+    for (const w of this.walkers) w.draw(renderer, alpha);
   }
 
-  /** Behind the sidekick and her (drawn just before them): the letter in tow and the far side of the lights' swirl. */
+  /** Behind the sidekick and her (drawn just before them): the far side of the lights' swirl. */
   drawBehindStar(renderer: SpriteRenderer, alpha: number): void {
-    this.letter.draw(renderer, alpha, 'back');
     this.starOrbs.draw(renderer, alpha, 'back');
   }
 
-  /** In front of everything: the near side of the lights' swirl, the letter flying off to hide, and the prompts. */
+  /** In front of everything in the world: the near side of the lights' swirl. */
   drawFront(renderer: SpriteRenderer, alpha: number): void {
     this.starOrbs.draw(renderer, alpha, 'front');
-    this.letter.draw(renderer, alpha, 'front');
-    if (this.phase === 'greet' && this.nearElf) {
-      drawPrompt(renderer, 'U', this.elf.x, this.elf.y - this.elf.headTop - 70, this.time);
-    } else if (this.phase === 'carry' && this.nearSign && this.letter.carried) {
-      drawPrompt(renderer, '↑', this.sign.slotX, this.sign.y - QUEST.letterHeight / 2 - 75, this.time);
+  }
+
+  /** The word, pinned to the screen; call with the view set to screen space (centred on 0, 0). */
+  drawScreen(renderer: SpriteRenderer, alpha: number): void {
+    this.sign.draw(renderer, alpha);
+  }
+
+  // --- the round -------------------------------------------------------------------
+
+  /** He tosses the word up out of his hand; it floats up to its place at the top of the screen. */
+  private toss(): void {
+    const r = ROUNDS[this.round], elf = this.elf, v = this.view;
+    this.handAt(elf);
+    elf.play('throw');
+    this.effects.toss(this.hand.x, this.hand.y);
+    // SFX(toss)
+    this.sign.toss(r.word, r.missing, this.hand.x - v.x, this.hand.y - v.y);
+    this.enter('toss');
+  }
+
+  /** Where the elf's hand is as he throws (world). */
+  private handAt(elf: Npc): void {
+    this.hand.x = elf.x + elf.facing * 128;
+    this.hand.y = elf.y - 216;
+  }
+
+  /** The right letter, caught: it jumps for joy; the others scatter into sparkles so she can read in peace. */
+  private catchLetter(w: LetterWalker): void {
+    w.cheer();
+    this.caught = w;
+    this.effects.collect(w.centerX, w.centerY);
+    // SFX(collect)
+    this.star.react('cheer', 1.2);
+    for (let i = this.walkers.length - 1; i >= 0; i--) {
+      const o = this.walkers[i];
+      if (o === w) continue;
+      if (o.active) this.effects.poof(o.centerX, o.centerY);
+      this.retire(o);
     }
-    if (this.turnAround) {
-      const s = this.star.position;
-      drawTurnHint(renderer, s.x + this.turnDir * 95, s.y, this.turnDir, this.time);
-    }
+    this.enter('caught');
   }
 
-  private startRound(): void {
-    const r = ROUNDS[this.round], elf = this.elf;
-    this.sign.show(r.word, r.missing);
-    this.findHidingSpot(r);
-    // out of his hands and up over his head, clear of the wings
-    const top = elf.y - elf.headTop;
-    this.letter.release(r.word[r.missing], elf.x - 40, elf.y - elf.headTop * 0.5, elf.x - 110, top - 300);
-    this.shimmerIn = 0;
-    this.enter('show');
-  }
-
-  /** Looks along the meadow around the round's spot, down low, for where the leaves will hide the letter best. */
-  private findHidingSpot(r: Round): void {
-    const h = RUNAWAY.hidden, w = glyphWidth(r.word[r.missing]) * h, range = QUEST.hideSearch;
-    let best = -Infinity;
-    for (let y = QUEST.hideTop; y <= QUEST.hideBottom; y += 15) {
-      for (let dx = -range; dx <= range; dx += 40) {
-        const x = r.hideX + dx;
-        let leafy = 0;
-        for (let gy = -0.4; gy < 0.45; gy += 0.2) for (let gx = -0.45; gx < 0.5; gx += 0.3) leafy += this.scenery.leafiness(x + gx * w, y + gy * h);
-        const score = leafy / 20 - (Math.abs(dx) / range) * 0.12; // leafiest wins; the planned spot breaks ties
-        if (score > best) { best = score; this.hideAt.x = x; this.hideAt.y = y; }
-      }
-    }
-  }
-
-  private place(): void {
-    if (!this.letter.carried) return;
-    this.letter.placeAt(this.sign.slotX, this.sign.y, QUEST.letterHeight, () => {
-      // in it goes, quietly: the celebration waits for the grown-up (see listen)
-      this.sign.fill(this.letter.orbs);
-      this.confirmSince = this.now;
-      this.enter('confirm');
-    });
-    this.enter('place');
-  }
-
-  /** The grown-up says she read it: the word lights up and hops along, then the star comes out. */
+  /** The grown-up says she read it: the word hops along and the elf comes running with her star. */
   private cheer(): void {
     this.sign.celebrate();
-    this.effects.earnBurst(this.sign.slotX, this.sign.y, rgba(255, 196, 80));
-    this.enter('celebrate');
+    const elf = this.elf, v = this.view;
+    // from wherever he was: if that's well off screen, he comes running in from just past the left edge
+    if (elf.x < v.x - v.width / 2 - 150 || elf.x > v.x + v.width / 2 + 150) elf.x = v.x - v.width / 2 - 160;
+    elf.play('run', 1.3);
+    this.enter('elfRun');
+  }
+
+  /** He holds up a star with a flourish; it floats from his hand up to the sidekick's swirl. */
+  private giveStar(): void {
+    const elf = this.elf;
+    this.handAt(elf);
+    elf.play('throw');
+    this.starOrbs.pop(this.hand.x, this.hand.y, this.hand.x, this.hand.y - 140);
+    this.effects.starGift(this.hand.x, this.hand.y - 40);
+    // SFX(star)
+    this.enter('give');
+  }
+
+  // --- the walking letters -------------------------------------------------------------
+
+  /** Brings letters on from just past the right edge of the screen as she goes; the one she needs comes after a few others. */
+  private spawnAhead(): void {
+    const v = this.view, edge = v.x + v.width / 2 + 120;
+    if (this.nextSpawnX > edge + 150 || this.walkers.length >= QUEST.maxWalkers) return;
+    const r = ROUNDS[this.round], key = r.word[r.missing];
+    const keyOut = this.walkers.some((w) => w.isKey);
+    const isKey = !keyOut && this.wrongLeft <= 0;
+    let letter = key;
+    if (!isKey) {
+      // a letter not in the word at all, so only the missing one is ever the answer
+      do letter = ALPHABET[Math.floor(this.rng.next() * ALPHABET.length)]; while (r.word.includes(letter));
+      this.wrongLeft--;
+    }
+    const behaviour: Behaviour = this.rng.next() < 0.5 ? 'pace' : 'stroll';
+    // never right on top of a letter that has wandered out there already
+    let x = Math.max(this.nextSpawnX, edge);
+    for (const o of this.walkers) if (Math.abs(o.x - x) < 260) x = o.x + 260;
+    const w = this.spare.pop() ?? new LetterWalker(this.walkerSeed++ * 977);
+    w.spawn(letter, x, behaviour, isKey);
+    this.walkers.push(w);
+    this.nextSpawnX = x + this.pick(QUEST.spawnGap[0], QUEST.spawnGap[1]);
+  }
+
+  /**
+   * Bumps and bounces. Landing on a letter from above sends it tumbling (the right one counts as
+   * caught: no telling off for that); walking into a wrong one knocks her back; the right one never hurts her.
+   */
+  private collide(): void {
+    const p = this.player, v = this.view;
+    for (let i = this.walkers.length - 1; i >= 0; i--) {
+      const w = this.walkers[i];
+      if (!w.active) continue;
+      // left behind the wall: gone (if it was the one she needs, it'll come back along later)
+      if (w.x < v.wallX - QUEST.cullBehind) {
+        if (w.isKey) this.wrongLeft = QUEST.keyAfter[0];
+        this.retire(w);
+        continue;
+      }
+      const dx = Math.abs(p.x - w.x), top = w.top;
+      if (p.vy > 0 && p.prevY <= top + 14 && p.y >= top - 6 && dx < w.halfWidth + 45) {
+        if (w.isKey) { p.bounce(); this.catchLetter(w); return; }
+        w.stomp();
+        p.bounce();
+        this.effects.stomp(w.centerX, top);
+        // SFX(stomp)
+        this.star.react('cheer', 0.8);
+        continue;
+      }
+      // only walking into it knocks her: once she's in it (say she was still flickering safe), she can walk on through
+      const touching = dx < w.halfWidth * 0.8 + 45 && p.y > top + 20 && p.y - 250 < w.bottom, fresh = touching && !w.touching;
+      w.touching = touching;
+      if (!fresh || w.isKey) continue;
+      if (p.hurtBy(w.x)) w.bump(p.x);
+    }
+  }
+
+  /** Takes a walker out of play, keeping it for reuse. */
+  private retire(w: LetterWalker): void {
+    const i = this.walkers.indexOf(w);
+    if (i >= 0) this.walkers.splice(i, 1);
+    if (!this.spare.includes(w)) this.spare.push(w);
   }
 
   private enter(phase: Phase): void {
     this.phase = phase;
     this.phaseTime = 0;
   }
+
+  /** A whole number from lo to hi. */
+  private pick(lo: number, hi: number): number { return lo + Math.floor(this.rng.next() * (hi - lo + 1)); }
 }
