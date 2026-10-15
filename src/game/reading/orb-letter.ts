@@ -23,8 +23,8 @@ const HIGHLIGHT_CORE = rgba(255, 248, 220);
 /** A highlighted letter keeps this much of its own colours, so it isn't one solid blaze of gold. */
 const KEEP_OWN = 0.25;
 /** How much the orbs twinkle (0..1 of their size and brightness), and how often one sparkles (the higher, the rarer: 0..1). */
-const TWINKLE = 0.6;
-const SPARKLE_EVERY = 0.965;
+const TWINKLE = 0.3;
+const SPARKLE_EVERY = 0.985;
 
 /** Pastel magic lights; each orb picks one. */
 const LIGHTS: readonly [number, number, number][] = [
@@ -32,8 +32,8 @@ const LIGHTS: readonly [number, number, number][] = [
   [110, 248, 190], [255, 214, 96], [255, 152, 118], [255, 240, 255],
 ];
 
-/** Orb slots for a letter, in units of its height: points along the strokes, some doubled up. */
-interface Layout { readonly x: Float32Array; readonly y: Float32Array; readonly count: number }
+/** Orb slots for a letter, in units of its height: points along the strokes, some doubled up; and the middle of its body. */
+interface Layout { readonly x: Float32Array; readonly y: Float32Array; readonly count: number; readonly middle: number }
 const layouts = new Map<string, Layout>();
 
 function layout(letter: string): Layout {
@@ -49,7 +49,7 @@ function layout(letter: string): Layout {
       ys.push(g.y[i] + g.tx[i] * across + g.ty[i] * along);
     }
   }
-  const out = { x: Float32Array.from(xs), y: Float32Array.from(ys), count: Math.min(xs.length, MAX_ORBS) };
+  const out = { x: Float32Array.from(xs), y: Float32Array.from(ys), count: Math.min(xs.length, MAX_ORBS), middle: g.middle };
   layouts.set(letter, out);
   return out;
 }
@@ -61,6 +61,8 @@ function layout(letter: string): Layout {
 export class OrbLetter {
   readonly swarm = new Swarm(MAX_ORBS);
   letter = '';
+  /** The middle of the letter's body, below its anchor (letter heights): 0 for a capital, more for a small letter. */
+  middle = 0;
   /** 0..1 overall. */
   opacity = 1;
   /** Extra brightness (decays by itself), for the moment it lands in the word. */
@@ -78,6 +80,7 @@ export class OrbLetter {
   set(letter: string): void {
     this.letter = letter;
     const l = layout(letter), sw = this.swarm, r = this.rng;
+    this.middle = l.middle;
     sw.setFormation(l.x, l.y, l.count);
     const favourite = Math.floor(r.next() * LIGHTS.length);
     for (let i = 0; i < sw.count; i++) {
@@ -104,7 +107,7 @@ export class OrbLetter {
     // twinkles gently, about its steady size and brightness
     for (const halo of [true, false]) {
       for (let i = 0; i < n; i++) {
-        const sd = sw.seed[i], tw = 0.5 + 0.5 * Math.sin(t * (2 + sd * 3) + sd * 40), wob = TWINKLE * (tw - 0.5);
+        const sd = sw.seed[i], tw = 0.5 + 0.5 * Math.sin(t * (1.2 + sd * 2) + sd * 40), wob = TWINKLE * (tw - 0.5);
         const x = sw.px[i] + (sw.x[i] - sw.px[i]) * alpha, y = sw.py[i] + (sw.y[i] - sw.py[i]) * alpha;
         if (halo) {
           const size = H * ORB.halo * this.size[i] * (1 + 0.3 * wob) * grow, a = glow * Math.min(1, 0.46 + 0.2 * wob + 0.3 * this.flash + 0.2 * hl);
@@ -118,7 +121,7 @@ export class OrbLetter {
     const S = SPARKLE_EVERY;
     for (let i = 0; i < n; i++) { // and every so often one sparkles
       const sd = sw.seed[i], s = Math.sin(t * (1.1 + sd * 1.3) + sd * 90);
-      if (s >= S) r.shape(Shape.Sparkle, sw.x[i], sw.y[i], H * 0.42 * ((s - S) / (1 - S)), H * 0.42 * ((s - S) / (1 - S)), rgba(255, 255, 255, glow * 0.75), Blend.Additive, 0, t * 2 + sd * 6);
+      if (s >= S) r.shape(Shape.Sparkle, sw.x[i], sw.y[i], H * 0.3 * ((s - S) / (1 - S)), H * 0.3 * ((s - S) / (1 - S)), rgba(255, 255, 255, glow * 0.6), Blend.Additive, 0, t * 2 + sd * 6);
     }
   }
 }

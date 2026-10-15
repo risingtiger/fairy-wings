@@ -18,10 +18,9 @@ import { SENTENCES, type Sentence } from '../reading/words';
 export const QUEST = {
   /**
    * At the start, both pairs of wings flutter over the meadow; this long after she first moves, they
-   * fly off to hide, and this long after that the elf is ready for her.
+   * fly off to hide. The elf doesn't wait for them: he says hello as soon as she reaches him.
    */
   wingsLeaveAfter: 1.6,
-  wingsHideFor: 2.4,
   /**
    * The sentence is pinned to the screen, centred across it: its letters' top edge this far below the
    * top (world units at the 1080-tall view, just under the HUD's row of stars), and the tallest they
@@ -36,11 +35,11 @@ export const QUEST = {
   greetLeave: 520,
   /**
    * The first time she reaches him, the elf says hello (three voice-over lines, see VoiceCues) before
-   * tossing the sentence up: when each line starts (s), each about 2.5 s after the one before it ends,
-   * and how long it all takes.
+   * tossing the sentence up: when each line starts (s), each about 0.6 s after the one before it ends
+   * (they're 10.7, 7.8 and 6.3 s long), and how long it all takes.
    */
-  helloLines: [0, 13.2, 23.4] as const,
-  helloFor: 30,
+  helloLines: [0, 11.35, 19.7] as const,
+  helloFor: 26.6,
   /** Seconds he keeps his hand up waving once his hello is over (he waves all through it, too). */
   waveAfterHello: 15,
   /**
@@ -112,7 +111,7 @@ export interface QuestEvents {
 export interface QuestView { x: number; y: number; width: number; height: number; wallX: number }
 
 export type Phase =
-  | 'intro' | 'wingsHide' | 'greet' | 'hello' | 'toss' | 'read' | 'wordCheer'
+  | 'greet' | 'hello' | 'toss' | 'read' | 'wordCheer'
   | 'allWords' | 'party' | 'letsGo' | 'lead' | 'seek' | 'opening' | 'wings' | 'wingsTalk' | 'free';
 
 /** Phases in which the elf moves about on his own (rather than standing and watching her). */
@@ -135,7 +134,7 @@ type Lead = 'run' | 'wait' | 'fetch' | 'beckon';
  * it (L), it bursts open, and the wings are hers. Then he says so, and follows her about wherever she goes.
  */
 export class ReadingQuest {
-  phase: Phase = 'intro';
+  phase: Phase = 'greet';
   readonly starOrbs = new StarOrbs();
   private readonly sign: SentenceSign;
   private readonly reader: ReadAlong;
@@ -151,8 +150,10 @@ export class ReadingQuest {
   /** How many sounds she's said in the word she's on (each chimes a little higher). */
   private chime = 0;
   private greeted = false;
-  /** She has moved (the wings fly off a moment after). */
+  /** She has moved (the wings fly off a moment after), how long ago, and they've gone. */
   private moved = false;
+  private sinceMoved = 0;
+  private wingsGone = false;
   private lead: Lead = 'run';
   private leadTime = 0;
   /** Seconds until the elf's next hop for joy. */
@@ -253,19 +254,16 @@ export class ReadingQuest {
     this.sidekick.avoid = this.sign.visible ? z : null;
     p.still = READING.has(this.phase);
 
+    // both pairs of wings flutter over the meadow until a moment after she first moves; then off they go
+    // to hide, whatever else is going on (the elf may already be saying hello)
+    if (!this.moved && (Math.abs(p.x - this.startX) > 20 || !p.grounded)) this.moved = true;
+    if (this.moved && !this.wingsGone && (this.sinceMoved += dt) >= QUEST.wingsLeaveAfter) {
+      this.wingsGone = true;
+      this.events.hideWings();
+      this.sidekick.react('curious', 1.2);
+    }
+
     switch (this.phase) {
-      case 'intro':
-        // both pairs of wings flutter over the meadow until a moment after she first moves; then off they go to hide
-        if (!this.moved && (Math.abs(p.x - this.startX) > 20 || !p.grounded)) { this.moved = true; this.phaseTime = 0; }
-        if (this.moved && this.phaseTime >= QUEST.wingsLeaveAfter) {
-          this.events.hideWings();
-          this.sidekick.react('curious', 1.2);
-          this.enter('wingsHide');
-        }
-        break;
-      case 'wingsHide':
-        if (this.phaseTime >= QUEST.wingsHideFor) this.enter('greet');
-        break;
       case 'greet':
         if (!nearElf) break;
         if (this.greeted) { this.toss(); break; }

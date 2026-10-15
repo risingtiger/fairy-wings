@@ -38,7 +38,7 @@ Gamepads use the standard mapping: stick to move, A jump, Y catch (L), X wand (J
 
 After the last word the elf says she's found them all, and a moment after he's said it there's a party. Then the elf leads her to a field of balls, boxes and stars. The sentence says which one the Purple Wings hide in; she catches it (L), and a light show gives her the wings. The elf follows her about from then on. An `ok` typed before she's tapped the letter, or before she's swiped the word, doesn't count.
 
-Letters are drawn by the GPU, not art: a ball-and-stick stroke font (`src/engine/text/stroke-font.ts`) lays out where the orbs go, and each letter is a flock of orbs (`src/engine/fx/swarm.ts`, `src/game/reading/orb-letter.ts`).
+Letters are drawn by the GPU, not art: a ball-and-stick stroke font with capitals and small letters (`src/engine/text/stroke-font.ts`; sentences are written with each word capitalised, like "I Am A Ball") lays out where the orbs go, and each letter is a flock of orbs (`src/engine/fx/swarm.ts`, `src/game/reading/orb-letter.ts`).
 
 ## Layout
 

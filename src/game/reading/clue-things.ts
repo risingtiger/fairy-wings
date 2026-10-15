@@ -8,7 +8,7 @@ import type { Sentence, ThingColor, ThingLook } from './words';
 /** Sizes (world units across), spacing and timings (s) of the things the wings can hide in. */
 const THINGS = {
   size: 150,
-  /** "I AM BIG": the big one. */
+  /** "I Am Big": the big one. */
   bigSize: 270,
   /** How far above the grass a thing's bottom floats (they hover, bobbing, like everything magic here). */
   hover: 30,

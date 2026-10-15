@@ -2,7 +2,7 @@ import { clamp, Damped, lerp, Rng, smooth, TAU, type Vec } from '../../engine/co
 import { ParticleSystem, type Spray } from '../../engine/fx/particles';
 import { hsla, rgba } from '../../engine/render/color';
 import { Blend, Shape, type SpriteRenderer } from '../../engine/render/sprite-renderer';
-import { glyphWidth } from '../../engine/text/stroke-font';
+import { glyphBottom, glyphWidth } from '../../engine/text/stroke-font';
 import { RAINBOW, WHITE_SHINE } from '../fx/effects';
 import { OrbLetter } from './orb-letter';
 
@@ -85,11 +85,15 @@ export class SentenceSign {
   private readonly wordOfLetter: number[] = [];
   private lit = new Float32Array(0);
   private popAge = new Float32Array(0);
-  /** Per word: its first and last letters, its edges (letter heights from the middle), and seconds since it was swiped. */
+  /**
+   * Per word: its first and last letters, its edges (letter heights from the middle), how far it reaches
+   * below the middle (further for a letter with a tail, like g), and seconds since it was swiped.
+   */
   private readonly firstOf: number[] = [];
   private readonly lastOf: number[] = [];
   private readonly leftU: number[] = [];
   private readonly rightU: number[] = [];
+  private readonly lowU: number[] = [];
   private exciteAge = new Float32Array(0);
   private widthU = 0;
   private readonly rng = new Rng(31);
@@ -99,6 +103,7 @@ export class SentenceSign {
   private hinting = false;
   private readonly focusL = new Damped(0);
   private readonly focusR = new Damped(0);
+  private readonly focusLow = new Damped(0.5);
   private focusAmount = 0;
   private hintAmount = 0;
   private hintTime = 0;
@@ -135,7 +140,7 @@ export class SentenceSign {
   /** Its edges: left and right of the letters, and their bottom (screen units). */
   get left(): number { return this.leftU[0] * this.letterHeight; }
   get right(): number { return this.rightU[this.rightU.length - 1] * this.letterHeight; }
-  get bottom(): number { return this.y + this.letterHeight / 2; }
+  get bottom(): number { return this.y + this.letterHeight * Math.max(0.5, ...this.lowU); }
   get wordCount(): number { return this.words.length; }
   /** Every letter has flown out of his hand and settled into place. */
   get settled(): boolean { return this.up && this.sinceTossed >= SIGN.stagger * (this.unitX.length - 1) + SIGN.flight + 0.25; }
@@ -148,11 +153,11 @@ export class SentenceSign {
   /** The middle of a word, screen x. */
   wordMiddle(word: number): number { return ((this.leftU[word] + this.rightU[word]) / 2) * this.letterHeight; }
 
-  /** Where a letter is right now (it bobs about its place), screen space. */
+  /** Where a letter is right now (it bobs about its place): the middle of its body, screen space. */
   letterPoint(letter: number, out: Vec): Vec {
-    const sw = this.letters[letter].swarm;
+    const l = this.letters[letter], sw = l.swarm;
     out.x = sw.anchorX;
-    out.y = sw.anchorY;
+    out.y = sw.anchorY + l.middle * sw.scale;
     return out;
   }
 
@@ -173,7 +178,7 @@ export class SentenceSign {
     this.up = this.shown = false;
     this.cheering = this.litLetter = this.focused = -1;
     this.hinting = false;
-    this.unitX.length = this.wordOfLetter.length = this.firstOf.length = this.lastOf.length = this.leftU.length = this.rightU.length = 0;
+    this.unitX.length = this.wordOfLetter.length = this.firstOf.length = this.lastOf.length = this.leftU.length = this.rightU.length = this.lowU.length = 0;
     const widths = words.flatMap((word) => [...word].map(glyphWidth)), count = widths.length;
     this.widthU = widths.reduce((sum, w) => sum + w, 0) + SIGN.letterGap * (count - words.length) + SIGN.wordGap * (words.length - 1);
     let cursor = -this.widthU / 2, n = 0;
@@ -189,6 +194,7 @@ export class SentenceSign {
       }
       this.lastOf.push(n - 1);
       this.rightU.push(cursor);
+      this.lowU.push(Math.max(...[...word].map(glyphBottom)));
     });
     this.lit = new Float32Array(count);
     this.popAge = new Float32Array(count).fill(99);
@@ -219,7 +225,7 @@ export class SentenceSign {
 
   /** Underlines the word she's reading (-1: none), with the hint to swipe across it while `hint` is on. */
   focus(word: number, hint = false): void {
-    if (word >= 0 && this.focused < 0) { this.focusL.reset(this.leftU[word]); this.focusR.reset(this.rightU[word]); }
+    if (word >= 0 && this.focused < 0) { this.focusL.reset(this.leftU[word]); this.focusR.reset(this.rightU[word]); this.focusLow.reset(this.lowU[word]); }
     this.focused = word;
     this.hinting = hint && word >= 0;
     if (!this.hinting) this.hintTime = 0;
@@ -367,7 +373,7 @@ export class SentenceSign {
     this.focusAmount = clamp(this.focusAmount + (w >= 0 ? dt * 3 : -dt * 3), 0, 1);
     this.hintAmount = clamp(this.hintAmount + (this.hinting ? dt * 2 : -dt * 4), 0, 1);
     if (this.hinting) this.hintTime += dt;
-    if (w >= 0) { this.focusL.update(this.leftU[w], 0.25, dt); this.focusR.update(this.rightU[w], 0.25, dt); }
+    if (w >= 0) { this.focusL.update(this.leftU[w], 0.25, dt); this.focusR.update(this.rightU[w], 0.25, dt); this.focusLow.update(this.lowU[w], 0.25, dt); }
   }
 
   /**
@@ -375,7 +381,7 @@ export class SentenceSign {
    * along it from the first letter to the last: swipe this way.
    */
   private drawFocus(r: SpriteRenderer, a: number): void {
-    const H = this.letterHeight, L = this.focusL.value * H, R = this.focusR.value * H, x = (L + R) / 2, w = R - L, lineY = this.y + H * 0.5 + 18;
+    const H = this.letterHeight, L = this.focusL.value * H, R = this.focusR.value * H, x = (L + R) / 2, w = R - L, lineY = this.y + H * this.focusLow.value + 18; // below any tails
     r.shape(Shape.Box, x, lineY, w + 16, 20, rgba(48, 18, 92, 0.6 * a), Blend.Alpha, 0.4);
     r.shape(Shape.Box, x, lineY, w, 8, rgba(255, 226, 250, 0.75 * a), Blend.Alpha, 0.35);
     r.shape(Shape.Glow, x, lineY, w * 1.15, 36, rgba(255, 200, 245, 0.3 * a), Blend.Additive, 0.6);
@@ -396,7 +402,7 @@ export class SentenceSign {
 
   /** Behind the letter she's on: a soft, slowly breathing golden glow, a faint ring now and then, and a few sparkles turning round it. */
   private drawSpotlight(r: SpriteRenderer, letter: number, a: number): void {
-    const t = this.time, H = this.letterHeight, sw = this.letters[letter].swarm, x = sw.anchorX, y = sw.anchorY;
+    const t = this.time, H = this.letterHeight, l = this.letters[letter], sw = l.swarm, x = sw.anchorX, y = sw.anchorY + l.middle * sw.scale;
     const pulse = 0.5 + 0.5 * Math.sin(t * 3.5), ring = (t * 0.6) % 1;
     r.shape(Shape.Glow, x, y, H * (1.8 + 0.15 * pulse), H * (1.8 + 0.15 * pulse), rgba(255, 196, 70, (0.26 + 0.08 * pulse) * a), Blend.Alpha, 0.2);
     r.shape(Shape.Glow, x, y, H * 1.2, H * 1.2, rgba(255, 246, 215, 0.22 * a), Blend.Additive, 0.8);

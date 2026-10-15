@@ -25,17 +25,17 @@ const OTHER_COLORS: ThingColor[] = ['blue', 'green', 'yellow', 'purple', 'orange
 
 /** The sentences a grown-up can pick from (in the HUD's grown-ups panel); the first is the default. */
 export const SENTENCES: readonly Sentence[] = [
-  sentence('ball', 'I AM A BALL', 'the one ball among boxes', { shape: 'ball', color: 'pink' },
+  sentence('ball', 'I Am A Ball', 'the one ball among boxes', { shape: 'ball', color: 'pink' },
     OTHER_COLORS.concat('red').map((color) => ({ shape: 'box', color }))),
-  sentence('box', 'I AM A BOX', 'the one box among balls', { shape: 'box', color: 'orange' },
+  sentence('box', 'I Am A Box', 'the one box among balls', { shape: 'box', color: 'orange' },
     OTHER_COLORS.concat('red').map((color) => ({ shape: 'ball', color }))),
-  sentence('red-ball', 'A RED BALL', 'the red ball among balls of other colours', { shape: 'ball', color: 'red' },
+  sentence('red-ball', 'A Red Ball', 'the red ball among balls of other colours', { shape: 'ball', color: 'red' },
     OTHER_COLORS.map((color) => ({ shape: 'ball', color }))),
-  sentence('red-box', 'A RED BOX', 'the red box among red balls and boxes of other colours', { shape: 'box', color: 'red' },
+  sentence('red-box', 'A Red Box', 'the red box among red balls and boxes of other colours', { shape: 'box', color: 'red' },
     [{ shape: 'ball', color: 'red' }, ...OTHER_COLORS.map((color): ThingLook => ({ shape: 'box', color })), { shape: 'ball', color: 'red' }]),
-  sentence('big', 'I AM BIG', 'the one big ball among little balls', { shape: 'ball', color: 'purple', big: true },
+  sentence('big', 'I Am Big', 'the one big ball among little balls', { shape: 'ball', color: 'purple', big: true },
     OTHER_COLORS.concat('red').map((color) => ({ shape: 'ball', color }))),
-  sentence('star', 'I AM A STAR', 'the one star among balls and boxes', { shape: 'star', color: 'yellow' },
+  sentence('star', 'I Am A Star', 'the one star among balls and boxes', { shape: 'star', color: 'yellow' },
     OTHER_COLORS.map((color, i): ThingLook => ({ shape: i % 2 ? 'box' : 'ball', color }))),
 ];
 
