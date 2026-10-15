@@ -12,6 +12,9 @@ export const approach = (value: number, target: number, delta: number) =>
 /** A point; used for scratch outputs so hot paths don't allocate. */
 export interface Vec { x: number; y: number }
 
+/** A stretch along x, left to right. */
+export interface Span { left: number; right: number }
+
 /** Critically damped follow (no overshoot). Keeps its velocity between calls. */
 export class Damped {
   velocity = 0;

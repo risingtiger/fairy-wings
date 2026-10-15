@@ -41,7 +41,7 @@ export const MEADOW: Level = {
     { image: 'scenes/meadow/hills.png', scale: 1.15, top: -705, factorX: 0.22, factorY: 0.2, saturation: 0.82, fog: haze(0.26) },
     // the forest art is cut off at the top; fade that edge so it melts into the sky when she flies up
     { image: 'scenes/meadow/forest.png', scale: 1.61, top: -950, factorX: 0.5, factorY: 0.45, saturation: 0.88, fog: haze(0.14), fadeTop: 110 },
-    { image: 'scenes/meadow/ground.png', scale: 1.474, top: -366 * 1.474, factorX: 1, factorY: 1 }, // grass line (row 366) at y = 0
+    { image: 'scenes/meadow/ground.png', scale: 1.474, top: -366 * 1.474, factorX: 1, factorY: 1, ground: true }, // grass line (row 366) at y = 0
   ],
 };
 

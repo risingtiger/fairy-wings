@@ -135,7 +135,7 @@ export class Hud {
         ${row(['M'], 'all sound on or off')}
         ${row(['N'], 'music on or off')}
       </ul>
-      <p class="muted">Walk up to the elf and he puts up a sentence. Tap the first letter: it glows gold. Say its sound, then tap the next letter, and the next. When you've said them all, put your finger down on the first letter and slide it across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf, and catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+      <p class="muted">Walk up to the elf and he puts up a sentence. Tap the first letter: it glows gold. Say its sound, then tap the next letter, and the next. When you've said them all, put your finger down on the first letter and slide it across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf: jump the gaps, and hop onto the floating islands to ride over the wide ones. Then catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
     </section>`;
   }
 

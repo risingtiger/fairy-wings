@@ -124,9 +124,11 @@ export class Player {
   pointAt: number | null = null;
 
   private coyote = 0;
-  /** Where a cutscene is floating her (world y of her feet), or null while she's free. */
+  /** Where a cutscene is floating her (world y of her feet), or null while she's free; and the x it's floating her to, if any. */
   private liftTo: number | null = null;
+  private liftToX: number | null = null;
   private readonly lift = new Damped(0);
+  private readonly liftX = new Damped(0);
   private lastFlight: FlightAbility | null = null;
   private jumpWasCut = false;
   private moveFired = false;
@@ -154,14 +156,17 @@ export class Player {
   /** Still safe after a knock: she blinks faint every other moment. */
   get flickering(): boolean { return this.invulnerable > 0 && this.state !== 'hurt' && Math.floor(this.invulnerable * 14) % 2 === 0; }
 
-  /** Takes the controls away and floats her to height `y` (world y of her feet), wherever she is. */
-  levitate(y: number): void {
+  /** Takes the controls away and floats her to height `y` (world y of her feet), and over to `x` if given (else she drifts to a stop where she is). */
+  levitate(y: number, x: number | null = null): void {
     if (this.liftTo === null) {
       this.lift.value = this.y;
       this.lift.velocity = this.vy;
+      this.liftX.value = this.x;
+      this.liftX.velocity = this.vx;
       this.squash.kick(-1.4);
     }
     this.liftTo = y;
+    this.liftToX = x;
     this.flying = this.grounded = false;
     this.coyote = 0;
     if (this.state !== 'fly') this.enter('fly');
@@ -195,6 +200,7 @@ export class Player {
     }
     this.lastFlight = ability;
     if (this.liftTo !== null) { this.updateLift(dt, this.liftTo); return; }
+    if (this.grounded) this.x += this.terrain.carry(this.x, this.y); // riding something that moves
 
     const free = !this.still, held = (action: Action) => free && input.down(action);
     const axis = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
@@ -265,6 +271,8 @@ export class Player {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     if (this.y < P.worldCeiling) { this.y = P.worldCeiling; this.vy = Math.max(0, this.vy); }
+    const walled = this.terrain.confine(this.prevX, this.x, this.prevY); // down a gap, its sides stop her
+    if (walled !== this.x) { this.x = walled; this.vx = 0; }
 
     // land on whatever is under her, or step off the end of it
     const floor = this.grounded ? null : this.terrain.landing(this.x, this.prevY, this.y);
@@ -318,8 +326,10 @@ export class Player {
   }
 
   drawShadow(r: SpriteRenderer): void {
-    const lift = clamp(1 - (this.terrain.groundY - this.pose.y) / 520, 0, 1), size = 0.35 + 0.65 * lift;
-    if (lift > 0) drawShadow(r, this.pose.x - this.facing * 8, this.terrain.groundY, 190 * size, 34 * size, 0.3 * lift);
+    const floor = this.terrain.floorBelow(this.pose.x, this.pose.y);
+    if (floor === null) return; // over a gap
+    const lift = clamp(1 - (floor - this.pose.y) / 520, 0, 1), size = 0.35 + 0.65 * lift;
+    if (lift > 0) drawShadow(r, this.pose.x - this.facing * 8, floor, 190 * size, 34 * size, 0.3 * lift);
   }
 
   drawBody(r: SpriteRenderer): void {
@@ -330,11 +340,16 @@ export class Player {
     r.drawTexture(this.sheet.binding);
   }
 
-  /** Carried by a cutscene: drifts to a stop and floats to the height she's held at, arms up. */
+  /** Carried by a cutscene: floats to the height she's held at (drifting to a stop, or over to where she's taken), arms up. */
   private updateLift(dt: number, toY: number): void {
     this.idleTime = 0;
-    this.vx = approach(this.vx, 0, PLAYER.groundDecel * dt);
-    this.x += this.vx * dt;
+    if (this.liftToX === null) {
+      this.vx = approach(this.vx, 0, PLAYER.groundDecel * dt);
+      this.x += this.vx * dt;
+    } else {
+      this.x = this.liftX.update(this.liftToX, 0.5, dt);
+      this.vx = this.liftX.velocity;
+    }
     this.y = this.lift.update(toY, 0.45, dt);
     this.vy = this.lift.velocity;
     this.grounded = false;

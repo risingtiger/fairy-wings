@@ -8,7 +8,7 @@ export const Blend = { Alpha: 0, Additive: 1 } as const;
 export type Blend = (typeof Blend)[keyof typeof Blend];
 
 /** Procedural shapes drawn by fs_shape (see sprite-shader.ts); each takes one parameter. */
-export const Shape = { Glow: 0, Sparkle: 1, Ring: 2, Crescent: 3, Orb: 4, Disc: 5, Beam: 6, Heart: 7, Box: 8, Star: 9 } as const;
+export const Shape = { Glow: 0, Sparkle: 1, Ring: 2, Crescent: 3, Orb: 4, Disc: 5, Beam: 6, Heart: 7, Box: 8, Star: 9, Island: 10, Fade: 11 } as const;
 export type Shape = (typeof Shape)[keyof typeof Shape];
 
 /** Scratch description of one quad: reset, fill, then draw. Reused to avoid per-sprite allocation. */
@@ -21,6 +21,8 @@ export class Quad {
   fog = 0;
   /** Soft fade at the top / bottom edge, as a fraction of the quad height. */
   fadeTop = 0; fadeBottom = 0;
+  /** Ragged cut-off at the left / right edge (textures only), as a fraction of the quad width. */
+  cutLeft = 0; cutRight = 0;
 
   reset(): this {
     this.x = this.y = this.w = this.h = 0;
@@ -31,6 +33,7 @@ export class Quad {
     this.color = WHITE;
     this.fog = 0;
     this.fadeTop = this.fadeBottom = 0;
+    this.cutLeft = this.cutRight = 0;
     return this;
   }
 }
@@ -234,7 +237,7 @@ export class SpriteRenderer {
     f[o + 10] = q.rotation; f[o + 11] = q.skew; f[o + 12] = q.saturation; f[o + 13] = q.flash;
     this.u32[o + 14] = q.color;
     this.u32[o + 15] = q.fog;
-    f[o + 16] = q.fadeTop; f[o + 17] = q.fadeBottom;
+    f[o + 16] = q.fadeTop; f[o + 17] = q.fadeBottom; f[o + 18] = q.cutLeft; f[o + 19] = q.cutRight;
 
     const view = this.viewCount - 1;
     const last = this.batchCount > 0 ? this.batches[this.batchCount - 1] : null;

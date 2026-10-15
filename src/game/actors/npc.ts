@@ -1,5 +1,6 @@
 import { Animator, type Clip, type SpriteSheet } from '../../engine/anim/sprite-sheet';
-import { clamp, Rng, Spring } from '../../engine/core/math';
+import { clamp, lerp, Rng, Spring } from '../../engine/core/math';
+import type { Terrain } from '../../engine/physics/terrain';
 import { rgba } from '../../engine/render/color';
 import type { SpriteRenderer } from '../../engine/render/sprite-renderer';
 import { drawShadow } from '../fx/effects';
@@ -33,11 +34,18 @@ export interface Leader { readonly x: number; readonly vx: number; readonly faci
 const MOVE_BLEND = 0.12;
 /** Close enough to where it's walking to: it stops. */
 const ARRIVED = 16;
+/**
+ * Jumping a gap in the ground: it takes off and lands this far from the edges; the leap takes `time` s
+ * plus `timePer` s per unit across, and rises `height` plus `heightPer` per unit across (a wide one is
+ * a big floaty bound).
+ */
+const LEAP = { edge: 45, time: 0.45, timePer: 1 / 1500, height: 110, heightPer: 0.3 } as const;
 
 /**
  * A character in the scene. While idle it holds one of its sheet's idle poses for a while, then eases
  * into another, breathing gently in between. Given a "moves" sheet it can also play that sheet's clips
- * (walk, throw, jump, ...), and walk, follow and hop about on its own.
+ * (walk, throw, jump, ...), and walk, follow and hop about on its own; given the terrain, it leaps the
+ * gaps in the ground on its way.
  */
 export class Npc {
   /** Feet position, world units. Moves don't change it: the behaviours below (or the caller) move it. */
@@ -76,8 +84,15 @@ export class Npc {
   private gravity = 0;
   /** Following: whether it's on its way (it only sets off once its leader is a little way off). */
   private catchingUp = false;
+  /** Leaping a gap: from and to (world x), seconds into it, and how long and high it is. */
+  private leap: { from: number; to: number; time: number; duration: number; height: number } | null = null;
 
-  constructor(private readonly sheet: SpriteSheet, readonly options: NpcOptions, private readonly moves: SpriteSheet | null = null) {
+  constructor(
+    private readonly sheet: SpriteSheet,
+    readonly options: NpcOptions,
+    private readonly moves: SpriteSheet | null = null,
+    private readonly terrain: Terrain | null = null,
+  ) {
     this.x = options.x;
     this.y = options.y;
     this.poses = options.poses?.map((name) => sheet.frame(name)) ?? sheet.clip('idle').frames;
@@ -91,8 +106,11 @@ export class Npc {
     this.fade = this.sinceChange = options.blend;
   }
 
-  /** Off the ground, mid-hop. */
-  get airborne(): boolean { return this.y < this.options.y || this.vy < 0; }
+  /** Off the ground, mid-hop or mid-leap. */
+  get airborne(): boolean { return this.y < this.options.y || this.vy < 0 || this.leap !== null; }
+
+  /** Whether it could walk to x without a gap in the way. */
+  canWalkTo(x: number): boolean { return !this.terrain?.gapBetween(this.x, x); }
 
   /** Starts or stops it looking like it's talking (a happy little bounce per word). */
   talk(on: boolean): void { this.talking = on; }
@@ -118,9 +136,9 @@ export class Npc {
     this.anim.play(clip, true);
   }
 
-  /** Stops any move and eases back into an idle pose. */
+  /** Stops any move and eases back into an idle pose (once it's landed, mid-leap). */
   stand(): void {
-    if (!this.move) return;
+    if (!this.move || this.leap) return;
     this.changeTo(MOVE_BLEND);
     this.move = null;
     this.holdLeft = this.rng.range(...this.options.hold);
@@ -129,7 +147,7 @@ export class Npc {
   /** Turns to face a point (with a little slack, so it doesn't flip back and forth). */
   lookAt(x: number): void {
     const dx = x - this.x;
-    if (Math.abs(dx) > 60 && Math.sign(dx) !== this.facing) {
+    if (Math.abs(dx) > 60 && Math.sign(dx) !== this.facing && !this.leap) {
       this.facing = dx > 0 ? 1 : -1;
       this.settle.kick(0.25);
     }
@@ -137,8 +155,19 @@ export class Npc {
 
   // --- behaviours ----------------------------------------------------------------
 
-  /** Moves towards x at `speed`, running (or walking, when it's slow) with its feet in step; stops and returns true once there. */
+  /**
+   * Moves towards x at `speed`, running (or walking, when it's slow) with its feet in step, and leaping
+   * any gap on the way (or stopping at its edge, if x is over it); stops and returns true once there.
+   */
   walkTo(x: number, dt: number, speed: number): boolean {
+    if (this.leap) return false; // landing first
+    const gap = this.terrain?.gapBetween(this.x, x);
+    if (gap) {
+      const right = x > this.x, edge = right ? gap.left - LEAP.edge : gap.right + LEAP.edge;
+      if (x > gap.left && x < gap.right) x = edge; // nowhere to stand there: as near as it can get
+      else if (Math.abs(edge - this.x) <= speed * dt + ARRIVED) { this.leapTo(right ? gap.right + LEAP.edge : gap.left - LEAP.edge); return false; }
+      else x = edge;
+    }
     const dx = x - this.x;
     if (Math.abs(dx) < ARRIVED) { this.stand(); return true; }
     this.facing = dx > 0 ? 1 : -1;
@@ -175,7 +204,14 @@ export class Npc {
     this.time += dt;
     this.talkAmount = clamp(this.talkAmount + (this.talking ? dt : -dt) * 6, 0, 1);
     this.sinceChange += dt;
-    if (this.airborne) {
+    const leap = this.leap;
+    if (leap) {
+      const t = Math.min(1, (leap.time += dt) / leap.duration);
+      this.x = lerp(leap.from, leap.to, t);
+      this.y = this.options.y - 4 * leap.height * t * (1 - t);
+      if (t > 0.5) this.play('fall');
+      if (t >= 1) { this.leap = null; this.y = this.options.y; this.play('land'); }
+    } else if (this.airborne) {
       this.vy += this.gravity * dt;
       this.y += this.vy * dt;
       if (this.y >= this.options.y) { this.y = this.options.y; this.vy = 0; this.play('land'); }
@@ -207,7 +243,7 @@ export class Npc {
     const o = this.options;
     // the shadow stays on the ground, shrinking and fading as it rises
     const lift = clamp((o.y - this.y) / 700, 0, 1), shadow = o.shadow * (1 - lift * 0.55);
-    drawShadow(r, this.x - this.facing * 6, o.y, shadow, shadow * 0.18, 0.3 * (1 - lift * 0.6));
+    if (this.terrain?.solid(this.x) ?? true) drawShadow(r, this.x - this.facing * 6, o.y, shadow, shadow * 0.18, 0.3 * (1 - lift * 0.6));
     // The old frame stays solid underneath while the new one fades in over it, and only melts away
     // at the very end, so it never looks see-through mid-change.
     const t = this.fade > 0 ? clamp(this.sinceChange / this.fade, 0, 1) : 1, e = t * t * (3 - 2 * t);
@@ -219,6 +255,14 @@ export class Npc {
   private get shownSheet(): SpriteSheet { return this.move && this.moves ? this.moves : this.sheet; }
   private get shownFrame(): number {
     return this.move && this.moves ? this.anim.frame : this.waving && this.greetPose !== null ? this.greetPose : this.poses[this.current];
+  }
+
+  /** Leaps from where it is to x, over a gap. */
+  private leapTo(x: number): void {
+    const across = Math.abs(x - this.x);
+    this.leap = { from: this.x, to: x, time: 0, duration: LEAP.time + across * LEAP.timePer, height: LEAP.height + across * LEAP.heightPer };
+    this.facing = x > this.x ? 1 : -1;
+    this.play('jumpUp');
   }
 
   /** Any usual pose but the current one, so every change shows. */

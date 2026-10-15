@@ -20,6 +20,7 @@ import { WingCharm } from './prizes/wing-charm';
 import { WING_STYLES, Wings, type WingId } from './prizes/wings';
 import { QUEST, ReadingQuest, type QuestView } from './quest/quest';
 import type { Aim } from './reading/read-along';
+import { ObstacleCourse } from './world/course';
 import { VIEW_HEIGHT, type Level } from './world/level';
 
 /**
@@ -41,6 +42,8 @@ const WALL = {
   /** She sees the wall's shimmer once she's within this many units of it. */
   showWithin: 700,
 } as const;
+/** Fallen into a gap, the camera follows her down no further than this (world y of her feet): she sinks out of sight into the clouds. */
+const CAMERA_DEPTH = 150;
 /**
  * The elf boy stands a little way along the meadow, turning to watch her. On his own he ponders (finger
  * to his chin), reads his book or smiles with his eyes closed, taking his time over each; he waves for
@@ -73,6 +76,8 @@ export class Game implements PlayerEvents {
   readonly sidekick: Sidekick;
   readonly elf: Npc;
   readonly quest: ReadingQuest;
+  /** Gaps to jump and islands to ride on the way to the wings. */
+  readonly course: ObstacleCourse;
   /** The light show when she gets her wings. */
   readonly ceremony: WingCeremony;
   /** Lights, fireworks and confetti when she's read the whole sentence. */
@@ -91,6 +96,7 @@ export class Game implements PlayerEvents {
 
   constructor(assets: Assets, readonly level: Level, private readonly ui: GameEvents) {
     this.background = assets.background;
+    this.background.holes = this.terrain.gaps;
     this.camera = new Camera(VIEW_HEIGHT, 0, level.restY);
     this.sounds = assets.sounds;
     this.player = new Player(assets.fairy, this.terrain, this);
@@ -99,7 +105,8 @@ export class Game implements PlayerEvents {
     this.wings.onFlap = (x, y, facing) => this.effects.flapped(x, y, facing);
     this.sidekick = new Sidekick(assets.star, this.player);
     this.sidekick.onTrail = (x, y) => this.effects.trail(x, y);
-    this.elf = new Npc(assets.elf, ELF, assets.elfMoves);
+    this.elf = new Npc(assets.elf, ELF, assets.elfMoves, this.terrain);
+    this.course = new ObstacleCourse(this.terrain, this.player, this.effects, this.sounds, this.sidekick);
     this.charms = CHARMS.map((c) => new WingCharm(WING_STYLES[c.id], sheets[c.id], c.x, c.y, (charm) => this.earnWings(charm)));
     this.party = new Party(this.effects);
     this.quest = new ReadingQuest(this.player, this.sidekick, this.elf, this.effects, this.sounds, {
@@ -107,6 +114,7 @@ export class Game implements PlayerEvents {
       // they flutter off up and away to the right, one after the other, well off screen
       hideWings: () => this.charms.forEach((c, i) => c.flyAway(this.camera.x + this.camera.width * (0.9 + 0.25 * i), -1500 - 200 * i)),
       party: () => this.party.start(),
+      setOff: (x) => this.course.start(x),
       wingsFound: (x, y, done) => {
         const charm = this.charms.find((c) => c.style.id === 'purple')!;
         charm.emerge(x, y, QUEST.wingsRiseTo);
@@ -128,6 +136,7 @@ export class Game implements PlayerEvents {
     this.quest.listen(input, now); // before she moves (see listen)
     if (!this.ceremony.busy && input.take('wings', now, 150)) this.cycleWings();
     p.flight = this.wings.flight;
+    this.course.update(dt); // islands move first, carrying her if she's on one
     p.update(dt, input, now);
     this.time += dt;
     // the left wall: never more than a screen width back from the furthest she's been
@@ -148,11 +157,12 @@ export class Game implements PlayerEvents {
     this.effects.update(dt);
 
     // small hops barely move the camera; real height (flight) is followed, keeping her a little above centre
-    const targetY = Math.min(this.level.restY + Math.min(0, p.y) * 0.32, p.y + 60, this.ceremony.cameraY ?? Infinity);
+    const feetY = Math.min(p.y, CAMERA_DEPTH);
+    const targetY = Math.min(this.level.restY + Math.min(0, feetY) * 0.32, feetY + 60, this.ceremony.cameraY ?? Infinity);
     if (!p.still) this.lead = clamp(p.facing * 150 + p.vx * 0.22, -320, 320);
     cam.follow(p.x, Math.max(PLAYER.worldCeiling - 260, targetY), this.lead, dt, 0.16, p.flying ? 0.32 : 0.22);
     // hard limits so a fast climb or dive never leaves her off screen (head ~320 units above her feet)
-    cam.clampY(p.y - VIEW_HEIGHT / 2 + 120, p.y - 320 + VIEW_HEIGHT / 2 - 90);
+    cam.clampY(feetY - VIEW_HEIGHT / 2 + 120, feetY - 320 + VIEW_HEIGHT / 2 - 90);
     this.effects.updateMotes(dt, cam.x, cam.y, cam.width, VIEW_HEIGHT);
     this.ceremony.update(dt, cam.x, cam.y, cam.width, VIEW_HEIGHT);
     this.party.update(dt, cam.x, cam.y, cam.width, VIEW_HEIGHT);
@@ -160,8 +170,9 @@ export class Game implements PlayerEvents {
 
   render(r: SpriteRenderer, alpha: number, aspect: number): void {
     const { x, y } = this.camera.frame(alpha, aspect), w = this.camera.width, h = VIEW_HEIGHT;
-    this.background.draw(r, x, y, w, h);
+    this.background.draw(r, x, y, w, h, () => this.course.drawBeneath(r, x, w));
     r.setView(x, y, w, h);
+    this.course.drawBehind(r, alpha);
     this.party.drawBehind(r, x, y, w, h);
     // during the ceremony the scene sits under its violet light; the wings being given, her and the star stay on top
     const featured = this.ceremony.featured;
@@ -176,6 +187,7 @@ export class Game implements PlayerEvents {
     this.sidekick.draw(r, alpha);
     this.wings.draw(r, this.player, pose.flash);
     this.player.drawBody(r);
+    this.course.drawFront(r, x, w);
     this.quest.starOrbs.draw(r, alpha, 'front');
     this.drawWall(r, x, y);
     this.effects.draw(r);

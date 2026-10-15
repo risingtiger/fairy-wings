@@ -83,8 +83,8 @@ export const QUEST = {
   leadAhead: 0.36,
   leadWait: 2.5,
   beckonFor: 1.2,
-  /** Where the things the wings hide among begin: this far on from wherever he sets off. */
-  fieldAhead: 2600,
+  /** Where the things the wings hide among begin: this far on from the end of the way there (the gaps and islands, see ObstacleCourse). */
+  fieldAhead: 800,
   /** Following her about: how far behind her he likes to be (right underneath her when she flies), and his top speed. */
   followBehind: 240,
   followSpeed: 980,
@@ -100,6 +100,8 @@ export interface QuestEvents {
   hideWings(): void;
   /** She read the whole sentence: lights, fireworks and confetti for a few seconds. */
   party(): void;
+  /** They're off to the wings from x: lays out the way there (gaps to jump, islands to ride) and returns where it ends. */
+  setOff(x: number): number;
   /**
    * The thing the wings hid in has burst open at (x, y): out they come, to her. Call `done` once she
    * has them and is back on the grass.
@@ -129,9 +131,10 @@ type Lead = 'run' | 'wait' | 'fetch' | 'beckon';
  * letter in turn while she says its sound (a grown-up types "ok" each time), then swiping across the
  * word and reading it out ("ok" again; a word of one letter needs only its sound). Each word read hops
  * for joy and gives her a star. Once she's read every word, he says she found them all, and there's a
- * party of lights. "Let's go get the wings!": he leads her off to the right, where balls,
- * boxes and stars float about. The sentence says which one the purple wings are hiding in; she catches
- * it (L), it bursts open, and the wings are hers. Then he says so, and follows her about wherever she goes.
+ * party of lights. "Let's go get the wings!": he leads her off to the right, over gaps she jumps and
+ * floating islands she rides, to where balls, boxes and stars float about. The sentence says which one
+ * the purple wings are hiding in; she catches it (L), it bursts open, and the wings are hers. Then he
+ * says so, and follows her about wherever she goes.
  */
 export class ReadingQuest {
   phase: Phase = 'greet';
@@ -316,8 +319,8 @@ export class ReadingQuest {
       case 'letsGo':
         if (this.phaseTime < QUEST.letsGoFor) break;
         elf.talk(false);
-        // the wings are hiding out there to the right, among things like the one the sentence says
-        this.field.start(this.sentence, Math.max(p.x, elf.x) + QUEST.fieldAhead);
+        // the wings are hiding out there to the right, past gaps and floating islands, among things like the one the sentence says
+        this.field.start(this.sentence, this.events.setOff(Math.max(p.x, elf.x)) + QUEST.fieldAhead);
         this.setLead('run');
         this.sidekick.react('cheer', 1);
         this.enter('lead');
@@ -460,8 +463,9 @@ export class ReadingQuest {
 
   /**
    * Off he goes to the right, towards the wings. Too far ahead of her and he stops and waits, looking
-   * back; if she still doesn't come, he runs back to her, waves her on, and sets off again. Once he
-   * reaches the things the wings hide among, he waits there for her and then tags along.
+   * back; if she still doesn't come, he runs back to her, waves her on, and sets off again. He leaps
+   * each gap on the way and waits on the far side, waving, until she's across too. Once he reaches the
+   * things the wings hide among, he waits there for her and then tags along.
    */
   private leadOn(dt: number): void {
     const p = this.player, elf = this.elf;
@@ -475,11 +479,12 @@ export class ReadingQuest {
     }
     switch (this.lead) {
       case 'run':
-        if (ahead > far) this.setLead('wait');
+        if (ahead > far || !elf.canWalkTo(p.x)) this.setLead('wait');
         else elf.walkTo(goal + 30, dt, QUEST.leadSpeed);
         break;
       case 'wait':
         this.waitForHer();
+        if (!elf.canWalkTo(p.x)) break; // she's still to cross the gap between them: he waves her on
         if (ahead < far * 0.6) this.setLead('run');
         else if (this.leadTime >= QUEST.leadWait) this.setLead('fetch');
         break;
