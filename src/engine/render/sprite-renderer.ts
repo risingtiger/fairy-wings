@@ -35,9 +35,10 @@ export class Quad {
   }
 }
 
+/** A texture ready to draw. It can be swapped in place for another resolution of the same image (see Loader.setTier). */
 export interface TextureBinding {
-  readonly texture: Texture;
-  readonly bindGroup: GPUBindGroup;
+  texture: Texture;
+  bindGroup: GPUBindGroup;
 }
 
 interface Batch { pipeline: number; bindGroup: GPUBindGroup; view: number; first: number; count: number }

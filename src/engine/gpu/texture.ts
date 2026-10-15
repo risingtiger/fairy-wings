@@ -3,6 +3,7 @@ import { fetchOk } from '../core/fetch';
 export interface Texture {
   readonly gpu: GPUTexture;
   readonly view: GPUTextureView;
+  /** Size of the full-resolution image, in its pixels, whatever resolution the GPU copy is (see createTexture). */
   readonly width: number;
   readonly height: number;
   readonly url: string;
@@ -16,8 +17,10 @@ export async function loadBitmap(url: string): Promise<ImageBitmap> {
 /**
  * Uploads a decoded image as a premultiplied-alpha rgba8 texture with a GPU-built mip chain. `maxMips`
  * caps the chain (atlases want a few only, so neighbouring cells never blend together when small).
+ * `resolution` is the bitmap's size as a fraction of the full-size image it stands in for (0.5 for a
+ * half-size copy): the texture reports the full size, so anything measured in the image's pixels fits.
  */
-export function createTexture(device: GPUDevice, mips: MipmapGenerator, bitmap: ImageBitmap, label: string, maxMips = Infinity): Texture {
+export function createTexture(device: GPUDevice, mips: MipmapGenerator, bitmap: ImageBitmap, label: string, maxMips = Infinity, resolution = 1): Texture {
   const { width, height } = bitmap;
   const gpu = device.createTexture({
     label,
@@ -28,7 +31,7 @@ export function createTexture(device: GPUDevice, mips: MipmapGenerator, bitmap: 
   });
   device.queue.copyExternalImageToTexture({ source: bitmap }, { texture: gpu, premultipliedAlpha: true }, [width, height]);
   mips.generate(gpu);
-  return { gpu, view: gpu.createView(), width, height, url: label };
+  return { gpu, view: gpu.createView(), width: Math.round(width / resolution), height: Math.round(height / resolution), url: label };
 }
 
 /** A 1x1 white texture, used where a pipeline needs a texture binding but draws procedurally. */

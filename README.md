@@ -57,11 +57,13 @@ src/game/          the reading game, built on the engine
   fx/              the scene's effects, the star orbs, the party, the wing ceremony
   game.ts          composes it all: camera, draw order, her moves → effects, sounds and reactions
 src/hud/           lit-html overlay
-assets/            game-ready art and sounds, served as-is
+assets/            game-ready art and sounds, served as-is; assets/low/ holds the half-size art
 art/               source art and raw recordings the tools read (not in git)
-tools/sprites/     sprite-sheet tools: align-sheet (characters), pack-sheet (props, wings, companions); npm run sprites
+tools/sprites/     sprite-sheet tools: align-sheet (characters), pack-sheet (props, wings, companions), make-low (half-size copies); npm run sprites
 tools/audio/       cut-sounds (npm run sounds), fetch-music (npm run music), prep-voice; all need ffmpeg
 ```
+
+**Two qualities of art.** Every sprite sheet and background has a full-size image and a half-size copy under `assets/low/` (made by `npm run lowres`, which `npm run sprites` also runs; images need even dimensions). Sheets and level layers keep one JSON / definition in full-size coordinates, so the game looks the same either way, just softer. The low tier also caps the drawing buffer at 1080 pixels tall: about a quarter of the GPU memory (36 MB against 145 MB) and far fewer pixels to fill, for older iPads. Which one runs (`chooseTier` in `src/engine/render/quality.ts`): `?quality=high` or `?quality=low` in the URL (remembered); otherwise touch devices and ones reporting under 4 GB start low, others high, and a high start that can't hold 45 fps drops to low mid-game (and starts low from then on). The stats panel (`) shows the tier and buffer size.
 
 **Adding a level:** describe it in `src/game/world/level.ts` (its layers under `assets/scenes/<level>/`, sky colour, camera height) and pass it to `Game`. Floating shelves are `Terrain` platforms (`game.terrain.platforms.push({ left, right, y })`).
 

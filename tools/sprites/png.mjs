@@ -1,4 +1,4 @@
-// Minimal PNG reader/writer (8-bit RGB/RGBA, non-interlaced). Node built-ins only.
+// Minimal PNG reader/writer (8-bit RGB/RGBA, non-interlaced) and sprite-edge helpers. Node built-ins only.
 import fs from 'node:fs';
 import zlib from 'node:zlib';
 
@@ -52,13 +52,62 @@ const chunk = (tag, body) => {
   return Buffer.concat([len, tagged, crc]);
 };
 
-/** Writes RGBA (straight alpha) as an 8-bit PNG. */
+/** Paeth predictor (PNG filter 4). */
+function paeth(a, b, c) {
+  const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
+  return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+}
+
+/**
+ * Writes RGBA (straight alpha) as an 8-bit PNG: RGB when every pixel is opaque, and each row run
+ * through whichever PNG filter leaves the smallest residuals, so it compresses well.
+ */
 export function encodePNG(file, w, h, rgba) {
-  const raw = Buffer.alloc(h * (w * 4 + 1));
-  for (let y = 0; y < h; y++) Buffer.from(rgba.buffer, rgba.byteOffset + y * w * 4, w * 4).copy(raw, y * (w * 4 + 1) + 1);
-  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6;
+  let opaque = true;
+  for (let k = 3; k < rgba.length; k += 4) if (rgba[k] !== 255) { opaque = false; break; }
+  const bpp = opaque ? 3 : 4, stride = w * bpp, px = new Uint8Array(h * stride);
+  for (let k = 0; k < w * h; k++) for (let c = 0; c < bpp; c++) px[k * bpp + c] = rgba[k * 4 + c];
+  const raw = Buffer.alloc(h * (stride + 1)), row = new Uint8Array(stride);
+  for (let y = 0; y < h; y++) {
+    const at = y * stride, out = y * (stride + 1);
+    let bestScore = Infinity;
+    for (let filter = 0; filter <= 4; filter++) {
+      let score = 0;
+      for (let x = 0; x < stride; x++) {
+        const v = px[at + x], a = x >= bpp ? px[at + x - bpp] : 0, b = y ? px[at - stride + x] : 0, c = y && x >= bpp ? px[at - stride + x - bpp] : 0;
+        const r = (v - (filter === 0 ? 0 : filter === 1 ? a : filter === 2 ? b : filter === 3 ? (a + b) >> 1 : paeth(a, b, c))) & 255;
+        row[x] = r;
+        score += r < 128 ? r : 256 - r;
+      }
+      if (score < bestScore) { bestScore = score; raw[out] = filter; raw.set(row, out + 1); }
+    }
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = opaque ? 2 : 6;
   fs.writeFileSync(file, Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0)),
   ]));
+}
+
+/**
+ * Bleeds edge colours into fully transparent neighbours (`passes` pixels deep, in place), so texture
+ * filtering never pulls in black around a sprite's edges.
+ */
+export function bleedEdges(d, w, h, passes = 4) {
+  for (let pass = 0; pass < passes; pass++) {
+    const fill = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const t = (y * w + x) * 4;
+      if (d[t + 3] || d[t] || d[t + 1] || d[t + 2]) continue;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const u = (yy * w + xx) * 4;
+        if (d[u + 3] || d[u] || d[u + 1] || d[u + 2]) { r += d[u]; g += d[u + 1]; b += d[u + 2]; n++; }
+      }
+      if (n) fill.push(t, Math.round(r / n) || 1, Math.round(g / n) || 1, Math.round(b / n) || 1);
+    }
+    for (let j = 0; j < fill.length; j += 4) { d[fill[j]] = fill[j + 1]; d[fill[j] + 1] = fill[j + 2]; d[fill[j] + 2] = fill[j + 3]; }
+  }
 }
