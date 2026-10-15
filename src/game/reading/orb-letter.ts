@@ -17,9 +17,14 @@ const ORB = {
   halo: 0.5,
 } as const;
 
-/** The bold colour a letter turns while it's pointed out (hot gold), and its white-hot cores. */
-const HIGHLIGHT = rgba(255, 206, 30);
-const HIGHLIGHT_CORE = rgba(255, 252, 214);
+/** The colour a letter turns while it's pointed out (a warm gold), and its pale cores. */
+const HIGHLIGHT = rgba(255, 210, 80);
+const HIGHLIGHT_CORE = rgba(255, 248, 220);
+/** A highlighted letter keeps this much of its own colours, so it isn't one solid blaze of gold. */
+const KEEP_OWN = 0.25;
+/** How much the orbs twinkle (0..1 of their size and brightness), and how often one sparkles (the higher, the rarer: 0..1). */
+const TWINKLE = 0.6;
+const SPARKLE_EVERY = 0.965;
 
 /** Pastel magic lights; each orb picks one. */
 const LIGHTS: readonly [number, number, number][] = [
@@ -94,24 +99,26 @@ export class OrbLetter {
   draw(r: SpriteRenderer, alpha: number): void {
     const sw = this.swarm, n = sw.count, H = sw.scale, t = this.time;
     if (!n || this.opacity <= 0.004) return;
-    const glow = this.opacity, hl = this.highlight, grow = 1 + 0.22 * hl;
-    // coloured halos (normal blend, so they read on bright sky too), then hot cores over them
+    const glow = this.opacity, hl = this.highlight, gold = hl * (1 - KEEP_OWN), grow = 1 + 0.12 * hl;
+    // coloured halos (normal blend, so they read on bright sky too), then hot cores over them; each orb
+    // twinkles gently, about its steady size and brightness
     for (const halo of [true, false]) {
       for (let i = 0; i < n; i++) {
-        const sd = sw.seed[i], tw = 0.5 + 0.5 * Math.sin(t * (3 + sd * 4) + sd * 40);
+        const sd = sw.seed[i], tw = 0.5 + 0.5 * Math.sin(t * (2 + sd * 3) + sd * 40), wob = TWINKLE * (tw - 0.5);
         const x = sw.px[i] + (sw.x[i] - sw.px[i]) * alpha, y = sw.py[i] + (sw.y[i] - sw.py[i]) * alpha;
         if (halo) {
-          const size = H * ORB.halo * this.size[i] * (0.85 + 0.3 * tw) * grow, a = glow * Math.min(1, 0.36 + 0.2 * tw + 0.3 * this.flash + 0.35 * hl);
-          r.shape(Shape.Glow, x, y, size, size, hl > 0 ? mixColor(this.light[i], HIGHLIGHT, hl, a) : withAlpha(this.light[i], a), Blend.Alpha, 0.2);
+          const size = H * ORB.halo * this.size[i] * (1 + 0.3 * wob) * grow, a = glow * Math.min(1, 0.46 + 0.2 * wob + 0.3 * this.flash + 0.2 * hl);
+          r.shape(Shape.Glow, x, y, size, size, hl > 0 ? mixColor(this.light[i], HIGHLIGHT, gold, a) : withAlpha(this.light[i], a), Blend.Alpha, 0.2);
         } else {
-          const size = H * ORB.core * this.size[i] * (0.8 + 0.35 * tw + 0.5 * this.flash) * grow, a = glow * Math.min(1, 0.7 + 0.3 * tw + this.flash);
-          r.shape(Shape.Orb, x, y, size, size, hl > 0 ? mixColor(this.core[i], HIGHLIGHT_CORE, hl, a) : withAlpha(this.core[i], a), Blend.Additive);
+          const size = H * ORB.core * this.size[i] * (0.97 + 0.35 * wob + 0.5 * this.flash) * grow, a = glow * Math.min(1, 0.85 + 0.3 * wob + this.flash);
+          r.shape(Shape.Orb, x, y, size, size, hl > 0 ? mixColor(this.core[i], HIGHLIGHT_CORE, gold, a) : withAlpha(this.core[i], a), Blend.Additive);
         }
       }
     }
+    const S = SPARKLE_EVERY;
     for (let i = 0; i < n; i++) { // and every so often one sparkles
       const sd = sw.seed[i], s = Math.sin(t * (1.1 + sd * 1.3) + sd * 90);
-      if (s >= 0.93) r.shape(Shape.Sparkle, sw.x[i], sw.y[i], H * 0.55 * ((s - 0.93) / 0.07), H * 0.55 * ((s - 0.93) / 0.07), rgba(255, 255, 255, glow * 0.9), Blend.Additive, 0, t * 2 + sd * 6);
+      if (s >= S) r.shape(Shape.Sparkle, sw.x[i], sw.y[i], H * 0.42 * ((s - S) / (1 - S)), H * 0.42 * ((s - S) / (1 - S)), rgba(255, 255, 255, glow * 0.75), Blend.Additive, 0, t * 2 + sd * 6);
     }
   }
 }

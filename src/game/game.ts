@@ -186,10 +186,13 @@ export class Game implements PlayerEvents {
     this.quest.drawScreen(r, alpha);
   }
 
-  /** Where the pointer is on the screen (screen space, centred on 0, 0), or null if it isn't on it: no finger down, or the mouse elsewhere. */
+  /**
+   * Where the pointer is on the screen (screen space, centred on 0, 0), or null if it isn't on it: no
+   * finger down, or the mouse elsewhere. A tap so quick it was over before this step still shows, once.
+   */
   private aimOf(pointer: Pointer): Aim | null {
-    if (!pointer.inside) return null;
     const a = this.aim, w = this.camera.width, s = pointer.pressStart;
+    if (!pointer.inside && s.at === a.pressAt) return null;
     a.x = (pointer.u - 0.5) * w; a.y = (pointer.v - 0.5) * VIEW_HEIGHT;
     a.pressX = (s.u - 0.5) * w; a.pressY = (s.v - 0.5) * VIEW_HEIGHT;
     a.pressed = pointer.pressed;

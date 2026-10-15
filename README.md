@@ -13,7 +13,7 @@ Open http://localhost:5173 in a browser with WebGPU: recent Chrome or Edge, or S
 
 | Key | Action |
 |---|---|
-| finger / mouse | point the wand at a letter · swipe across a word (while reading) |
+| finger / mouse | tap (click) a letter with the wand · press and slide across a word (while reading) |
 | ← → / A D | walk |
 | Shift | hold to run |
 | ↓ / S | crouch |
@@ -32,11 +32,11 @@ Gamepads use the standard mapping: stick to move, A jump, Y catch (L), X wand (J
 
 **The story.** The fairy is out to earn her wings. The elf boy says hello, then tosses a whole sentence up to the top of the screen (the grown-ups' panel picks which); it's the clue to where the wings are. She stands by him and reads it with her wand, and a grown-up beside her confirms each step by typing `ok`:
 
-1. She points at the letter she's on (finger on an iPad, or the mouse). She raises her wand, a swirl of sparkles flows from it to the letter, and the letter shimmers gold. Pointing anywhere else (a letter further on, say) and the line dissolves and the letter goes dark until she comes back to it.
-2. She says its sound; the grown-up types `ok`. The letter pops back to normal, and the next one lights only once she points at it.
-3. With every sound said, she puts her finger on the word's first letter and swipes quickly to the right: the word shimmers and fizzes, as often as she likes. She reads it out; the grown-up types `ok`. The word hops for joy and gives her a star.
+1. She taps the letter she's on (finger on an iPad, or a mouse click). She raises her wand, a swirl of sparkles flows from it to the letter, and the letter glows gold, staying lit while she says it. Touching a different letter puts it out (and the line dissolves) until she taps hers again.
+2. She says its sound; the grown-up types `ok`. The letter pops back to normal, and the next one lights only once she taps it.
+3. With every sound said, she puts her finger down on the word's first letter (with the mouse, holds the button down) and slides it to the right: each letter lights as her finger reaches it, and at the last one the word shimmers and fizzes, as often as she likes. She reads it out; the grown-up types `ok`. The word hops for joy and gives her a star. A word of one letter, like "a", skips this: its sound's `ok` reads the word.
 
-After the last word the elf says she's found them all; she reads the whole sentence (pointing and swiping freely), the grown-up types `ok` once more, and there's a party. Then the elf leads her to a field of balls, boxes and stars. The sentence says which one the Purple Wings hide in; she catches it (L), and a light show gives her the wings. The elf follows her about from then on. An `ok` typed while she isn't pointing at the letter, or before she's swiped the word, doesn't count.
+After the last word the elf says she's found them all, and a moment after he's said it there's a party. Then the elf leads her to a field of balls, boxes and stars. The sentence says which one the Purple Wings hide in; she catches it (L), and a light show gives her the wings. The elf follows her about from then on. An `ok` typed before she's tapped the letter, or before she's swiped the word, doesn't count.
 
 Letters are drawn by the GPU, not art: a ball-and-stick stroke font (`src/engine/text/stroke-font.ts`) lays out where the orbs go, and each letter is a flock of orbs (`src/engine/fx/swarm.ts`, `src/game/reading/orb-letter.ts`).
 
@@ -59,7 +59,7 @@ src/game/          the reading game, built on the engine
   world/           levels as data (parallax layers, sky, camera rest height); MEADOW is the first
   actors/          the player (movement feel, moves, flight), NPCs (idle poses, walk/follow/hop), the star sidekick
   prizes/          wings: styles, the wardrobe she wears (and the flight it gives), the floating pickup
-  reading/         sentences, orb letters, the sentence sign, the read-along (pointing, sounding out, swiping), the clue things
+  reading/         sentences, orb letters, the sentence sign, the read-along (tapping, sounding out, swiping), the clue things
   quest/           the story's state machine, and when the voice-overs play
   fx/              the scene's effects, the star orbs, the wand stream, the party, the wing ceremony
   game.ts          composes it all: camera, draw order, her moves → effects, sounds and reactions

@@ -66,7 +66,7 @@ const BURST: Spray = {
  * The sentence, pinned near the top of the screen (screen space: x across from the screen's centre,
  * y down from it), so it stays put however the camera moves. The elf tosses the whole of it up at
  * once: its letters fly out of his hand one after another and line up, centred, sized to fit the
- * screen. Then it's for reading: the letter she points at can shimmer gold, the word she's on is
+ * screen. Then it's for reading: the letter she taps can glow gold, the word she's on is
  * underlined (with a hint to swipe across it once its sounds are done), a letter she has said pops,
  * a word she swipes across shimmers and fizzes, and a word read hops along, letter by letter. At the
  * end the whole sentence hops word by word.
@@ -332,8 +332,9 @@ export class SentenceSign {
       const lit = this.lit[n], shimmer = Math.sin(this.time * 10 + n);
       l.highlight = Math.max(lit, ex * 0.8, pop < 1 ? (1 - pop) * 0.5 : 0);
       sw.anchorX = slotX + ex * Math.sin(this.time * 23 + n * 2) * H * 0.04;
-      sw.anchorY = this.y + Math.sin(this.time * 2 + n * 1.3) * 4 - hop * H * 0.46 - lit * Math.abs(Math.sin(this.time * 5)) * H * 0.16;
-      sw.scale = H * (1 + lit * (0.12 + 0.06 * shimmer) + ex * 0.08 * (1 + shimmer));
+      // the lit letter stands a little taller and bobs gently, so it stays easy to read
+      sw.anchorY = this.y + Math.sin(this.time * 2 + n * 1.3) * 4 - hop * H * 0.46 - lit * (0.5 + 0.5 * Math.sin(this.time * 3.5)) * H * 0.05;
+      sw.scale = H * (1 + lit * (0.08 + 0.02 * Math.sin(this.time * 3 + n)) + ex * 0.08 * (1 + shimmer));
       sw.tilt = ex * Math.sin(this.time * 16 + n * 1.7) * 0.14;
       sw.form = 1;
       sw.cloudRadius = H * 0.55;
@@ -393,16 +394,16 @@ export class SentenceSign {
     r.shape(Shape.Glow, headX, lineY, 120 * fade, 60 * fade, rgba(255, 220, 140, 0.55 * h), Blend.Additive, 0.5);
   }
 
-  /** Behind the letter she's on: a pulsing golden glow and a ring of sparkles turning round it. */
+  /** Behind the letter she's on: a soft, slowly breathing golden glow, a faint ring now and then, and a few sparkles turning round it. */
   private drawSpotlight(r: SpriteRenderer, letter: number, a: number): void {
     const t = this.time, H = this.letterHeight, sw = this.letters[letter].swarm, x = sw.anchorX, y = sw.anchorY;
-    const pulse = 0.5 + 0.5 * Math.sin(t * 8), ring = (t * 1.25) % 1;
-    r.shape(Shape.Glow, x, y, H * (2.1 + 0.3 * pulse), H * (2.1 + 0.3 * pulse), rgba(255, 190, 40, (0.4 + 0.2 * pulse) * a), Blend.Alpha, 0.2);
-    r.shape(Shape.Glow, x, y, H * 1.3, H * 1.3, rgba(255, 250, 210, 0.45 * a), Blend.Additive, 0.8);
-    r.shape(Shape.Ring, x, y, H * (0.9 + 1.4 * ring), H * (0.9 + 1.4 * ring), rgba(255, 214, 60, 0.8 * (1 - ring) * a), Blend.Alpha, 0.07);
-    for (let i = 0; i < 8; i++) {
-      const ang = t * 2.4 + (i / 8) * TAU, size = (26 + 22 * (0.5 + 0.5 * Math.sin(t * 9 + i * 2))) * a;
-      r.shape(Shape.Sparkle, x + Math.cos(ang) * H * 0.85, y + Math.sin(ang) * H * 0.75, size, size, rgba(255, 250, 225, 0.95 * a), Blend.Additive, 0, t * 3 + i);
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3.5), ring = (t * 0.6) % 1;
+    r.shape(Shape.Glow, x, y, H * (1.8 + 0.15 * pulse), H * (1.8 + 0.15 * pulse), rgba(255, 196, 70, (0.26 + 0.08 * pulse) * a), Blend.Alpha, 0.2);
+    r.shape(Shape.Glow, x, y, H * 1.2, H * 1.2, rgba(255, 246, 215, 0.22 * a), Blend.Additive, 0.8);
+    r.shape(Shape.Ring, x, y, H * (0.95 + 0.9 * ring), H * (0.95 + 0.9 * ring), rgba(255, 220, 110, 0.4 * (1 - ring) * a), Blend.Alpha, 0.05);
+    for (let i = 0; i < 5; i++) {
+      const ang = t * 1.4 + (i / 5) * TAU, size = (18 + 10 * (0.5 + 0.5 * Math.sin(t * 4 + i * 2))) * a;
+      r.shape(Shape.Sparkle, x + Math.cos(ang) * H * 0.85, y + Math.sin(ang) * H * 0.75, size, size, rgba(255, 248, 225, 0.7 * a), Blend.Additive, 0, t * 2 + i);
     }
   }
 

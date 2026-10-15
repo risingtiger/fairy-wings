@@ -125,7 +125,7 @@ export class Hud {
     return html`<section class="panel help">
       ${this.heading(html`Earn your wings <small>reading game</small>`, 'Hide controls', this.toggleHelp)}
       <ul>
-        ${row(['Finger'], 'point your wand at a letter (or with the mouse) · swipe across a word')}
+        ${row(['Finger'], 'tap a letter with your wand (or click it) · press and slide across a word')}
         ${row(['←', '→'], 'walk')}
         ${row(['Shift'], 'hold to run')}
         ${row(['Space'], 'jump · hold for higher')}
@@ -135,7 +135,7 @@ export class Hud {
         ${row(['M'], 'all sound on or off')}
         ${row(['N'], 'music on or off')}
       </ul>
-      <p class="muted">Walk up to the elf and he puts up a sentence. Point your wand at the first letter: it glows gold. Say its sound, then on to the next letter, and the next. When you've said them all, put your finger on the first letter and swipe across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf, and catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+      <p class="muted">Walk up to the elf and he puts up a sentence. Tap the first letter: it glows gold. Say its sound, then tap the next letter, and the next. When you've said them all, put your finger down on the first letter and slide it across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf, and catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
     </section>`;
   }
 
@@ -153,7 +153,7 @@ export class Hud {
       <p class="muted">${s.sentenceLocked
         ? 'The sentence is up, so it\'s set for this game. Reload the page to start again with a different one.'
         : 'Pick it before the elf puts it up.'}</p>
-      <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard each time she says the sound of the letter she's pointing at (it glows gold), again once she has swiped across the word and read it out, and once more when she reads the whole sentence. An <kbd>o</kbd><kbd>k</kbd> doesn't count while she isn't pointing at the letter, or before she has swiped the word.</p>
+      <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard each time she says the sound of the letter she's tapped (it glows gold), and again once she has swiped across the word and read it out. A word of one letter, like "a", needs only its sound. An <kbd>o</kbd><kbd>k</kbd> doesn't count before she's tapped the letter, or before she has swiped the word.</p>
     </section>`;
   }
 
