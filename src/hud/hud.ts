@@ -27,7 +27,17 @@ export interface HudState {
   muted: boolean;
   /** The music alone is switched off. */
   musicOff: boolean;
+  /** The grown-ups' panel (picking the sentence) is open. */
+  showGrownUps: boolean;
+  /** The sentences to pick from, and the one picked. */
+  sentences: readonly SentenceOption[];
+  sentenceId: string;
+  /** The first word is up: the sentence can't be changed any more (until the page is reloaded). */
+  sentenceLocked: boolean;
 }
+
+/** A sentence in the grown-ups' list: its words, and what the wings hide in. */
+export interface SentenceOption { id: string; text: string; hint: string }
 
 /**
  * The DOM overlay. The game pushes changes with update(); rendering is coalesced to at most once
@@ -39,11 +49,22 @@ export class Hud {
     fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0,
     wingName: '', wingsWorn: false, flight: -1, toast: null,
     stars: 0, starGoal: 0, muted: false, musicOff: false,
+    showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false,
   };
+  /** A grown-up picked a different sentence. */
+  onSentence: ((id: string) => void) | null = null;
   private scheduled = false;
   private toastTimer = 0;
   private toastCount = 0;
   private readonly toggleHelp = () => this.update({ showHelp: !this.state.showHelp });
+  private readonly toggleGrownUps = () => this.update({ showGrownUps: !this.state.showGrownUps });
+  private readonly pickSentence = (e: Event) => {
+    const select = e.target as HTMLSelectElement;
+    this.onSentence?.(select.value);
+    select.blur(); // hand the keyboard back to the game
+  };
+  /** Keys pressed in the grown-ups' panel (choosing from the list) shouldn't move her about. */
+  private readonly keepKeys = (e: KeyboardEvent) => e.stopPropagation();
   /** Clicks shouldn't focus the buttons: Space (jump) would then press them too. */
   private readonly keepFocus = (e: Event) => e.preventDefault();
 
@@ -86,6 +107,7 @@ export class Hud {
     }
     return html`
       ${s.showHelp ? this.help(s) : this.helpButton()}
+      ${s.showGrownUps ? this.grownUps(s) : this.grownUpsButton()}
       ${s.showDebug ? this.debug(s) : nothing}
       ${s.toast ? keyed(s.toast.id, html`<div class="toast"><b>${s.toast.title}</b><span>${s.toast.body}</span></div>`) : nothing}
       ${s.wingName ? this.wingBadge(s) : nothing}
@@ -111,12 +133,38 @@ export class Hud {
         ${row(['Shift'], 'hold to run')}
         ${row(['Space'], 'jump over letters (or bounce off their heads) · hold for higher')}
         ${row(['J'], 'wave your wand · knocks a letter away')}
-        ${row(['L'], 'catch the missing letter')}
+        ${row(['L'], 'catch the missing letter (and the thing the wings hide in)')}
         ${row(['E'], 'put wings on or away (once earned)')}
         ${row(['M'], 'all sound on or off')}
         ${row(['N'], 'music on or off')}
       </ul>
-      <p class="muted">Walk up to the elf to get a word. Remember the golden letter before it floats away, then head right: letters come walking along. Jump over the wrong ones or knock them away with your wand, and catch the missing one with <kbd>L</kbd> (careful: knock it away and you'll have to find it again). Read the word out loud, and the elf brings you a star. ${s.starGoal} stars earn the Purple Wings.<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+      <p class="muted">Walk up to the elf to get a word. Remember the golden letter before it floats away, then head right: letters come walking along. Jump over the wrong ones or knock them away with your wand, and catch the missing one with <kbd>L</kbd> (careful: knock it away and you'll have to find it again). Read the word out loud, and the elf brings you a star and the next word. ${s.starGoal} words make a sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf, and catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+    </section>`;
+  }
+
+  private grownUpsButton() {
+    return html`<button class="grown-ups-toggle" tabindex="-1" aria-expanded="false" @mousedown=${this.keepFocus} @click=${this.toggleGrownUps}>
+      Grown-ups <span class="chevron">▾</span>
+    </button>`;
+  }
+
+  private grownUps(s: HudState) {
+    const picked = s.sentences.find((o) => o.id === s.sentenceId);
+    return html`<section class="panel grown-ups" @keydown=${this.keepKeys}>
+      <h1>Grown-ups
+        <button class="collapse" tabindex="-1" aria-label="Hide the grown-ups panel" aria-expanded="true" @mousedown=${this.keepFocus} @click=${this.toggleGrownUps}>▴</button>
+      </h1>
+      <label>
+        <span>The sentence (the clue to where the purple wings are)</span>
+        <select .value=${s.sentenceId} ?disabled=${s.sentenceLocked} @change=${this.pickSentence}>
+          ${s.sentences.map((o) => html`<option value=${o.id} ?selected=${o.id === s.sentenceId}>${o.text}</option>`)}
+        </select>
+      </label>
+      ${picked ? html`<p><b>The wings hide in:</b> ${picked.hint}.</p>` : nothing}
+      <p class="muted">${s.sentenceLocked
+        ? 'The first word is up, so the sentence is set for this game. Reload the page to start again with a different one.'
+        : 'Pick it before the elf puts up the first word.'}</p>
+      <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard when she says the caught letter's sound, again when she reads the word, and once more when she reads the whole sentence out.</p>
     </section>`;
   }
 

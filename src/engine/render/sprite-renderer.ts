@@ -6,7 +6,7 @@ export const Blend = { Alpha: 0, Additive: 1 } as const;
 export type Blend = (typeof Blend)[keyof typeof Blend];
 
 /** Procedural shapes drawn by fs_shape (see sprite-shader.ts). */
-export const Shape = { Glow: 0, Sparkle: 1, Ring: 2, Crescent: 3, Orb: 4, Disc: 5, Beam: 6, Heart: 7 } as const;
+export const Shape = { Glow: 0, Sparkle: 1, Ring: 2, Crescent: 3, Orb: 4, Disc: 5, Beam: 6, Heart: 7, Box: 8, Star: 9 } as const;
 export type Shape = (typeof Shape)[keyof typeof Shape];
 
 /** Packs a colour: r, g, b in 0..255, alpha in 0..1. */

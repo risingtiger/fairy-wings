@@ -11,6 +11,7 @@ import { IntroScene, SKY_TOP } from './game/intro-scene';
 import { MUSIC, MUSIC_MANIFEST } from './game/music';
 import { VoiceCues } from './game/voice-cues';
 import { createVoice } from './game/voiceovers';
+import { SENTENCES, sentenceById } from './game/words';
 import { Hud } from './hud/hud';
 
 async function main(): Promise<void> {
@@ -32,7 +33,17 @@ async function main(): Promise<void> {
   });
   const cues = new VoiceCues(voice, scene);
   scene.sounds.muted = loadMuted();
-  hud.update({ muted: scene.sounds.muted, starGoal: scene.quest.starGoal });
+  // the sentence a grown-up picked last time (the grown-ups' panel), until its first word goes up
+  scene.quest.chooseSentence(sentenceById(loadSetting(SENTENCE_KEY)));
+  hud.onSentence = (id) => {
+    if (!scene.quest.chooseSentence(sentenceById(id))) return;
+    saveSetting(SENTENCE_KEY, id);
+    hud.update({ sentenceId: scene.quest.sentence.id, starGoal: scene.quest.starGoal });
+  };
+  hud.update({
+    muted: scene.sounds.muted, starGoal: scene.quest.starGoal,
+    sentences: SENTENCES.map(({ id, text, hint }) => ({ id, text, hint })), sentenceId: scene.quest.sentence.id,
+  });
   // M silences everything; N switches just the music
   const music = await musicLoading;
   let musicOff = loadMusicOff();
@@ -90,6 +101,7 @@ async function main(): Promise<void> {
           fps: loop.stats.fps, cpuMs: loop.stats.cpuMs,
           quads: renderer.stats.quads, draws: renderer.stats.draws, particles: scene.effects.particles.count,
           playerState: scene.player.state, playerX: scene.player.x, playerY: scene.player.y,
+          sentenceLocked: !scene.quest.canChangeSentence,
         });
       }
     },
@@ -107,6 +119,13 @@ function loadMuted(): boolean {
 }
 function saveMuted(muted: boolean): void {
   try { localStorage.setItem(MUTED_KEY, muted ? '1' : '0'); } catch { /* not remembered */ }
+}
+const SENTENCE_KEY = 'sidescroller.sentence';
+function loadSetting(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function saveSetting(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* not remembered */ }
 }
 const MUSIC_OFF_KEY = 'sidescroller.musicOff';
 function loadMusicOff(): boolean {

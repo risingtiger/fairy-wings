@@ -7,8 +7,9 @@ import type { IntroAssets } from './assets';
 import type { Action } from './controls';
 import { Effects } from './effects';
 import { Npc, type NpcOptions } from './npc';
+import { Party } from './party';
 import { Player, PLAYER, type PlayerEvents } from './player';
-import { ReadingQuest, type QuestView } from './quest';
+import { QUEST, ReadingQuest, type QuestView } from './quest';
 import type { SoundName } from './sounds';
 import { Star } from './star';
 import { WingCeremony } from './wing-ceremony';
@@ -23,8 +24,9 @@ const REST_Y = -335;
 const SKY = { r: 30 / 255, g: 148 / 255, b: 251 / 255, a: 1 };
 export const SKY_TOP: GPUColor = SKY;
 /**
- * Both pairs of wings float over the start, just higher than she can jump (her head tops out around
- * y = -660). They're locked: earning every star brings the purple pair flying to her, wherever she is.
+ * Both pairs of wings flutter over the start, just higher than she can jump (her head tops out around
+ * y = -660), until they fly off to hide (see the quest). The purple pair comes out again from whatever
+ * the sentence says they hid in; the rainbow pair stays hidden for now.
  */
 const CHARMS: { id: WingId; x: number; y: number }[] = [
   { id: 'purple', x: 270, y: -740 },
@@ -66,8 +68,10 @@ export class IntroScene implements PlayerEvents {
   readonly star: Star;
   readonly elf: Npc;
   readonly quest: ReadingQuest;
-  /** The light show when her stars bring her wings. */
+  /** The light show when she gets her wings. */
   readonly ceremony: WingCeremony;
+  /** Lights, fireworks and confetti when she's read the whole sentence. */
+  readonly party = new Party();
   readonly sounds: SoundBank<SoundName>;
   private readonly charms: WingCharm[];
   private readonly background: ParallaxBackground;
@@ -103,11 +107,15 @@ export class IntroScene implements PlayerEvents {
     for (const charm of this.charms) charm.locked = true;
     this.quest = new ReadingQuest(this.player, this.star, this.elf, this.effects, this.sounds, {
       starsChanged: (count) => ui.starsChanged(count),
-      wingsEarned: (done) => {
+      hideWings: () => {
+        // they flutter off up and away to the right, one after the other, well off screen
+        this.charms.forEach((c, i) => c.flyAway(this.camX.value + this.viewWidth * (0.9 + 0.25 * i), -1500 - 200 * i));
+      },
+      party: () => this.party.start(),
+      wingsFound: (x, y, done) => {
         const charm = this.charms.find((c) => c.style.id === 'purple');
         if (!charm) { done(); return; }
-        // the wings were left far behind at the start: they come swooping in from the top left to her
-        if (Math.abs(charm.x - this.player.x) > this.viewWidth * 0.4) charm.flyIn(this.camX.value - this.viewWidth * 0.6, this.camY.value - VIEW_HEIGHT * 0.7);
+        charm.emerge(x, y, QUEST.wingsRiseTo);
         this.ceremony.start(charm, done);
       },
     }, VIEW_HEIGHT);
@@ -131,7 +139,10 @@ export class IntroScene implements PlayerEvents {
     const v = this.view;
     v.x = this.camX.value; v.y = this.camY.value; v.width = this.viewWidth; v.wallX = wallX;
     this.quest.update(dt, now, v);
-    for (const charm of this.charms) charm.update(dt, p);
+    for (const charm of this.charms) {
+      charm.update(dt, p);
+      if (charm.flying) this.effects.trail(charm.x, charm.currentY); // a trail of sparkles as they fly off
+    }
     this.effects.headAt(p.x, p.y - 330);
     this.effects.update(dt);
 
@@ -150,6 +161,7 @@ export class IntroScene implements PlayerEvents {
     if (this.camY.value > maxY) { this.camY.value = maxY; this.camY.velocity = Math.min(0, this.camY.velocity); }
     this.effects.updateMotes(dt, this.camX.value, this.camY.value, this.viewWidth, VIEW_HEIGHT);
     this.ceremony.update(dt, this.camX.value, this.camY.value, this.viewWidth, VIEW_HEIGHT);
+    this.party.update(dt, this.camX.value, this.camY.value, this.viewWidth, VIEW_HEIGHT);
   }
 
   render(renderer: SpriteRenderer, alpha: number, aspect: number): void {
@@ -158,6 +170,7 @@ export class IntroScene implements PlayerEvents {
     const cy = lerp(this.prevCamY, this.camY.value, alpha);
     this.background.draw(renderer, cx, cy, this.viewWidth, VIEW_HEIGHT);
     renderer.setView(cx, cy, this.viewWidth, VIEW_HEIGHT);
+    this.party.drawBehind(renderer, cx, cy, this.viewWidth, VIEW_HEIGHT);
     // during the ceremony the scene sits under its violet light; the wings being given, her and the star stay on top
     const featured = this.ceremony.featured;
     for (const charm of this.charms) if (charm !== featured) charm.draw(renderer);
@@ -175,7 +188,8 @@ export class IntroScene implements PlayerEvents {
     this.drawWall(renderer, cx, cy);
     this.effects.draw(renderer);
     this.ceremony.drawFront(renderer, alpha, cx, cy, this.viewWidth, VIEW_HEIGHT);
-    // the word is pinned to the screen, over everything
+    this.party.drawFront(renderer, cx, cy, this.viewWidth, VIEW_HEIGHT);
+    // the sentence is pinned to the screen, over everything
     renderer.setView(0, 0, this.viewWidth, VIEW_HEIGHT);
     this.quest.drawScreen(renderer, alpha);
   }

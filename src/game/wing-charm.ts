@@ -11,11 +11,18 @@ import type { WingStyle } from './wings';
 export class WingCharm {
   collected = false;
   locked = false;
+  /** Flown off to hide: neither drawn nor touchable until it comes out again (emerge). */
+  hidden = false;
   /** 0..1: the wings wake up: they flutter fast, shine, and the glow and sparkles grow. */
   excite = 0;
   private summoned = false;
   /** Flying in to hover over her (until it's summoned down to her). */
   private escorting = false;
+  /** Flying off to hide: where to, and for how long so far. */
+  private away: { x: number; y: number; time: number } | null = null;
+  /** Coming out of hiding: the height it rises to (and waits at until it's summoned), and how much of it shows, 0..1. */
+  private riseTo: number | null = null;
+  private grown = 1;
   private flap = 0;
   private readonly fx: Damped;
   private readonly fy: Damped;
@@ -36,6 +43,8 @@ export class WingCharm {
   }
 
   get currentY(): number { return this.y + Math.sin(this.time * 2) * 18; }
+  /** On its way off to hide. */
+  get flying(): boolean { return this.away !== null; }
 
   /**
    * Swoops in from (fromX, fromY) to hover high over her, wherever she is, following her about;
@@ -46,6 +55,28 @@ export class WingCharm {
     this.y = this.fy.value = fromY;
     this.fx.velocity = this.fy.velocity = 0;
     this.escorting = true;
+  }
+
+  /** Flutters off towards (toX, toY), well off screen, and hides there. */
+  flyAway(toX: number, toY: number): void {
+    this.fx.value = this.x; this.fy.value = this.y;
+    this.fx.velocity = this.fy.velocity = 0;
+    this.away = { x: toX, y: toY, time: 0 };
+  }
+
+  /**
+   * Comes out of hiding at (x, y), growing out of whatever it hid in, and rises to `toY`; it waits
+   * there (locked, so she can't just grab it) until summon() brings it down to her.
+   */
+  emerge(x: number, y: number, toY: number): void {
+    this.hidden = this.collected = this.summoned = this.escorting = false;
+    this.away = null;
+    this.locked = true;
+    this.x = this.fx.value = x;
+    this.y = this.fy.value = y;
+    this.fx.velocity = this.fy.velocity = 0;
+    this.riseTo = toY;
+    this.grown = 0;
   }
 
   /** Spirals gently down to her; she gets the wings when it reaches her. */
@@ -59,9 +90,20 @@ export class WingCharm {
   }
 
   update(dt: number, player: Player): void {
-    if (this.collected) return;
+    if (this.collected || this.hidden) return;
     this.time += dt;
     this.flap += dt * (5 + 27 * this.excite);
+    this.grown = Math.min(1, this.grown + dt * 1.4);
+    if (this.away) {
+      // a quick, excited flutter that swings up and away
+      const a = this.away;
+      a.time += dt;
+      this.excite = Math.min(0.7, a.time);
+      this.x = this.fx.update(a.x, 0.9, dt) + Math.sin(a.time * 5) * 30;
+      this.y = this.fy.update(a.y, 1.1, dt);
+      if (a.time > 4) { this.hidden = true; this.away = null; this.excite = 0; }
+      return;
+    }
     if (this.summoned) {
       // a wide, lazy sway on the way down that narrows as they reach her
       const far = clamp(Math.abs(player.y - 170 - this.y) / 450, 0, 1);
@@ -70,6 +112,9 @@ export class WingCharm {
     } else if (this.escorting) {
       this.x = this.fx.update(player.x + 40, 0.8, dt);
       this.y = this.fy.update(Math.min(player.y - 740, -740), 0.8, dt);
+      return;
+    } else if (this.riseTo !== null) {
+      this.y = this.fy.update(this.riseTo, 0.45, dt);
       return;
     } else if (this.locked) return;
     const dx = player.x - this.x, dy = player.y - 150 - this.currentY; // her chest
@@ -80,9 +125,9 @@ export class WingCharm {
   }
 
   draw(renderer: SpriteRenderer): void {
-    if (this.collected) return;
-    const q = renderer.quad, t = this.time, y = this.currentY, pulse = 0.5 + 0.5 * Math.sin(t * 3);
-    const glow = this.style.glow, e = this.excite, big = (this.style.tier > 1 ? 1 : 0.82) * (1 + 0.5 * e);
+    if (this.collected || this.hidden) return;
+    const q = renderer.quad, t = this.time, y = this.currentY, pulse = 0.5 + 0.5 * Math.sin(t * 3), g = this.grown * (2 - this.grown);
+    const glow = this.style.glow, e = this.excite, big = (this.style.tier > 1 ? 1 : 0.82) * (1 + 0.5 * e) * g;
 
     // a soft column of light so it reads as "take me" from across the screen
     q.reset();
@@ -113,7 +158,7 @@ export class WingCharm {
     const place = () => {
       q.reset();
       q.x = this.x + 30; q.y = y;
-      q.w = this.sheet.cellWidth * s * sweep; q.h = this.sheet.cellHeight * s;
+      q.w = this.sheet.cellWidth * s * sweep * g; q.h = this.sheet.cellHeight * s * g;
       q.originX = this.sheet.originX; q.originY = this.sheet.originY;
       q.u0 = f.u0; q.v0 = f.v0; q.u1 = f.u1; q.v1 = f.v1;
       q.rotation = Math.sin(t * 1.3) * 0.08;

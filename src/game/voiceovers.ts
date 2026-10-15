@@ -11,6 +11,14 @@ export type Speaker = 'elf' | 'twinkle' | 'narrator';
 export const VOICE_LINES = {
   // TODO: transcript from the filename only ("Hi Crystal! My friend Twinkle h..."); type in the rest by ear
   'elf-hello-crystal': { speaker: 'elf', text: 'Hi Crystal! My friend Twinkle…', file: 'elf-hello-crystal.mp3' },
+  // TODO: transcripts from the filenames only; type in the rest by ear
+  'elf-wings-stuck': { speaker: 'elf', text: 'My wings are stuck up in that…', file: 'elf-wings-stuck.mp3' },
+  'elf-words-clue': { speaker: 'elf', text: 'The words give you a clue where…', file: 'elf-words-clue.mp3' },
+  'elf-found-it': { speaker: 'elf', text: "Nice! You found it! Here's the ne…", file: 'elf-found-it.mp3' },
+  // TODO: transcripts from the filenames only; type in the rest by ear
+  'elf-all-words': { speaker: 'elf', text: 'You found all the words! They a…', file: 'elf-all-words.mp3' },
+  'elf-lets-go': { speaker: 'elf', text: "Let's go get the wings!", file: 'elf-lets-go.mp3' },
+  'elf-found-wings': { speaker: 'elf', text: "I can't believe you found your…", file: 'elf-found-wings.mp3' },
 } satisfies Record<string, VoiceLineInfo<Speaker>>;
 
 export type VoiceId = keyof typeof VOICE_LINES;
@@ -27,7 +35,7 @@ export const VOICE = {
 };
 
 /** Lines worth having decoded before they're needed (so they start without a gap). */
-const PRELOAD: readonly VoiceId[] = ['elf-hello-crystal'];
+const PRELOAD: readonly VoiceId[] = ['elf-hello-crystal', 'elf-wings-stuck', 'elf-words-clue', 'elf-found-it', 'elf-all-words', 'elf-lets-go', 'elf-found-wings'];
 
 /** Makes the game's voice player; starts loading the first lines in the background (nothing waits on it). */
 export function createVoice(): VoicePlayer<VoiceId, Speaker> {

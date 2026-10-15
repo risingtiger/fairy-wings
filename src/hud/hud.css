@@ -45,7 +45,7 @@ html, body {
 .help h1 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 16px; font-weight: 700; }
 
 /* the controls panel starts folded away behind this button; both buttons take clicks through the HUD */
-.help-toggle, .help .collapse {
+.help-toggle, .help .collapse, .grown-ups-toggle, .grown-ups .collapse {
   pointer-events: auto;
   cursor: pointer;
   color: var(--text);
@@ -76,13 +76,55 @@ html, body {
   font-size: 12px;
   line-height: 1;
 }
-.help-toggle:hover, .help .collapse:hover { background: rgba(84, 44, 140, 0.9); }
+.help-toggle:hover, .help .collapse:hover, .grown-ups-toggle:hover, .grown-ups .collapse:hover { background: rgba(84, 44, 140, 0.9); }
+
+/* the grown-ups' panel (top right): picking the sentence */
+.grown-ups-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 4px 16px rgba(40, 10, 70, 0.25);
+}
+.grown-ups-toggle .chevron { font-size: 11px; opacity: 0.8; }
+.grown-ups { top: 16px; right: 16px; width: min(320px, calc(100vw - 64px)); pointer-events: auto; }
+.grown-ups h1 { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 16px; font-weight: 700; }
+.grown-ups .collapse {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--key);
+  font-size: 12px;
+  line-height: 1;
+}
+.grown-ups label { display: grid; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.grown-ups select {
+  font: 700 16px/1.3 ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  padding: 6px 8px;
+}
+.grown-ups select:disabled { opacity: 0.6; }
+.grown-ups select option { color: #2c1654; }
+.grown-ups p { margin: 10px 0 0; font-size: 12.5px; }
+.grown-ups p b { color: var(--accent); }
+.grown-ups kbd { margin-right: 2px; }
 .help h1 small { font-weight: 500; color: var(--accent); }
 .help ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .help li { display: grid; grid-template-columns: 96px 1fr; align-items: center; }
 .help p { margin: 10px 0 0; font-size: 12.5px; }
 
-.debug { top: 16px; right: 16px; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.debug { top: 60px; right: 16px; font-variant-numeric: tabular-nums; font-size: 12.5px; }
 
 kbd {
   display: inline-block;
