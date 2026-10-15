@@ -59,7 +59,6 @@ const STROKES: Record<string, readonly Stroke[]> = {
   X: [[[0, 0], [0.76, 1]], [[0.76, 0], [0, 1]]],
   Y: [[[0, 0], [0.4, 0.5], [0.8, 0]], [[0.4, 0.5], [0.4, 1]]],
   Z: [[[0, 0], [0.72, 0], [0, 1], [0.72, 1]]],
-  '↑': [[[0.36, 1], [0.36, 0]], [[0, 0.36], [0.36, 0], [0.72, 0.36]]],
 };
 
 /** Points along a glyph, centred on its box (x across, y down; the capitals span y -0.5..0.5). */

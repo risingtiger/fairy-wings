@@ -1,7 +1,7 @@
 {
   "source": [
-    "elf exec-aa198707-481f-4171-9c97-4546e10bc901.png",
-    "elf exec-f515ab02-1961-4dc2-9fcb-9978d4397da3.png"
+    "art/elf-idle-1.png",
+    "art/elf-idle-2.png"
   ],
   "out": "assets/sprites/elf/elf",
   "frames": [

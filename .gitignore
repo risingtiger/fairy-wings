@@ -2,4 +2,7 @@ node_modules/
 dist/
 .DS_Store
 .playwright-mcp/
+# source art the sprite tools read (large; not shipped): see README
+art/
+# downloads cached by the audio tools
 tools/audio/.cache/

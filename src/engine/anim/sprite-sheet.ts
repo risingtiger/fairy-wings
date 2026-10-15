@@ -1,3 +1,4 @@
+import { besides, fetchJson } from '../core/fetch';
 import type { TextureBinding } from '../render/sprite-renderer';
 
 /** Shape of the JSON written by tools/sprites/align-sheet.mjs and pack-sheet.mjs. */
@@ -5,7 +6,7 @@ interface SheetJson {
   image: string;
   cell: { w: number; h: number };
   pivot: { x: number; y: number };
-  frames: Record<string, { x: number; y: number; w: number; h: number; head: [number, number]; sockets?: Record<string, [number, number]>; size?: [number, number] }>;
+  frames: Record<string, { x: number; y: number; w: number; h: number; head: [number, number]; sockets?: Record<string, [number, number]> }>;
   animations: Record<string, { frames: string[]; fps?: number; loop?: boolean }>;
 }
 
@@ -19,8 +20,6 @@ export interface SheetFrame {
   readonly head: readonly [number, number];
   /** Named attachment points relative to the pivot, in sheet pixels (e.g. a wand tip). */
   readonly sockets: Readonly<Record<string, readonly [number, number]>>;
-  /** Width and height of the drawing itself (not the cell), in sheet pixels, when the sheet records it. */
-  readonly size: readonly [number, number];
 }
 
 export interface Clip {
@@ -54,7 +53,6 @@ export class SpriteSheet {
         u0: f.x / width, v0: f.y / height, u1: (f.x + f.w) / width, v1: (f.y + f.h) / height,
         head: f.head,
         sockets: f.sockets ?? {},
-        size: f.size ?? [f.w, f.h],
       });
     }
     for (const [name, a] of Object.entries(json.animations)) {
@@ -63,11 +61,8 @@ export class SpriteSheet {
   }
 
   static async load(url: string, bindImage: (imageUrl: string) => Promise<TextureBinding>): Promise<SpriteSheet> {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to load ${url}: ${response.status}`);
-    const json = (await response.json()) as SheetJson;
-    const binding = await bindImage(new URL(json.image, new URL(url, location.href)).pathname);
-    return new SpriteSheet(binding, json);
+    const json = await fetchJson<SheetJson>(url);
+    return new SpriteSheet(await bindImage(besides(url, json.image)), json);
   }
 
   frame(name: string): number {
@@ -80,5 +75,40 @@ export class SpriteSheet {
     const c = this.clips.get(name);
     if (!c) throw new Error(`Unknown animation "${name}"`);
     return c;
+  }
+
+  /** A named attachment point on a frame (sheet pixels from the pivot), or `fallback` if it has none. */
+  socket(frame: number, name: string, fallback: readonly [number, number] = [0, 0]): readonly [number, number] {
+    return this.frames[frame].sockets[name] ?? fallback;
+  }
+}
+
+/** Plays one clip at a time. `rate` lets movement speed drive playback so feet don't skate. */
+export class Animator {
+  clip: Clip | null = null;
+  time = 0;
+  index = 0;
+  finished = false;
+
+  play(clip: Clip, restart = false): void {
+    if (clip === this.clip && !restart) return;
+    this.clip = clip;
+    this.time = 0;
+    this.index = 0;
+    this.finished = false;
+  }
+
+  update(dt: number, rate = 1): void {
+    const clip = this.clip;
+    if (!clip) return;
+    this.time += dt * rate;
+    const n = clip.frames.length, step = Math.floor(this.time * clip.fps);
+    this.index = clip.loop ? step % n : Math.min(step, n - 1);
+    this.finished = !clip.loop && step >= n;
+  }
+
+  /** Sheet frame index currently showing. */
+  get frame(): number {
+    return this.clip ? this.clip.frames[this.index] : 0;
   }
 }

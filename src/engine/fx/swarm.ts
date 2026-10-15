@@ -1,7 +1,4 @@
-import type { Rng } from '../core/math';
-
-const TAU = Math.PI * 2;
-const fract = (v: number) => v - Math.floor(v);
+import { fract, TAU, type Rng } from '../core/math';
 
 /**
  * A flock of particles that holds a formation. Each particle is sprung to its own slot in a shape
@@ -64,6 +61,12 @@ export class Swarm {
     this.x = f(); this.y = f(); this.vx = f(); this.vy = f(); this.px = f(); this.py = f();
     this.homeX = f(); this.homeY = f(); this.seed = f();
     for (let i = 0; i < capacity; i++) this.seed[i] = fract(Math.sin(i * 12.9898 + 4.1414) * 43758.5453);
+  }
+
+  /** Sets how it moves (see the fields of the same names). */
+  tune(stiffness: number, damping: number, trail: number, flex: number, turbulence: number, jitter: number): void {
+    this.stiffness = stiffness; this.damping = damping; this.trail = trail;
+    this.flex = flex; this.turbulence = turbulence; this.jitter = jitter;
   }
 
   /** Uses `count` slots from (xs, ys), in formation units. */

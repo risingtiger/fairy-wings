@@ -1,6 +1,6 @@
 # Fairy Sidescroller
 
-A reading game for 4–5 year olds: a 2D side-scroller rendered entirely with WebGPU. The only runtime library is lit-html, used for the DOM HUD.
+A reading game for 4–5 year olds: a 2D side-scroller rendered entirely with WebGPU. The only runtime library is lit-html, used for the DOM HUD. Built to run smoothly on iPads from around 2023.
 
 ## Run
 
@@ -16,47 +16,57 @@ Open http://localhost:5173 in a browser with WebGPU: recent Chrome or Edge, or S
 | ← → / A D | walk |
 | Shift | hold to run |
 | ↓ / S | crouch |
-| Space / ↑ / W | jump (hold for higher) · under the word, puts the letter in |
-| U | talk to the elf |
+| Space / ↑ / W | jump (hold for higher); in the air with wings on, fly (hold to climb, ↓ to dive) |
 | J / Z | wave the wand · knocks a walking letter off the screen |
-| L | catch the missing letter |
+| L | catch the missing letter (and the thing the wings hide in) |
 | K / X | cast a spell |
 | H | get hurt (demo) |
 | E / C | switch wings / put them away (once found) |
-| Space in the air | fly (wings worn): hold to climb, ↓ to dive |
-| M | sound effects on/off (remembered) |
+| M | sound effects and music on/off (remembered; the voice stays on) |
+| N | music on/off (remembered) |
 | ? | show/hide controls |
 | ` | performance stats |
 
 Gamepads use the standard mapping: stick to move, A jump, Y catch (L), X wand (J), B cast, LB wings, RB run.
 
-**The story.** The fairy wants to earn her wings. The elf boy next to the start tells her she needs ten stars. Each round he shows a word with one letter missing (CAT, SUN, DOG, …); the gap shows the missing letter as a dotted outline, like a tracing sheet. The missing letter bursts out of the elf as a flurry of little lights, swirls up into its shape over his head, and flies off screen, left or right, to hide. It finds the leafiest spot near its round's place on the meadow, sometimes up where she has to jump, and takes on the colours of the leaves behind it, so it is still a letter but hard to see. Nothing gives it away as she walks past. Standing in front of it, she waves her wand (J) to catch it: it lights up, bursts apart and flocks back together beside the star sidekick, following it like a little school of fish. Under the word she jumps, and the letter flies up into its place. The word reads itself out letter by letter, a star pops out, and the sidekick rounds it up into the line of stars trailing behind it. Ten stars bring the Purple Wings floating down to her, and she puts them on.
+**The story.** The fairy is out to earn her wings. The elf boy says hello, then tosses up the first word of a sentence (the grown-ups' panel picks which). It floats to the top of the screen; one letter glows gold for a moment, then melts into lights and floats away. Out on the meadow letters come walking along on little legs: she jumps over the wrong ones (or bounces off their heads), knocks them away with her wand, and catches the missing one with L. A grown-up types `ok` when she says its sound, and again when she reads the word; the elf runs in with a star and the next word. Once the whole sentence is read (and `ok`'d) there's a party, then the elf leads her to a field of balls, boxes and stars. The sentence says which one the Purple Wings hide in; she catches it, and a light show gives her the wings. The elf follows her about from then on.
 
-All the letters are drawn from code, not art: a ball-and-stick stroke font (`src/engine/text/stroke-font.ts`) lays out where the orbs go, and each letter is a flock of orbs (`src/engine/fx/swarm.ts`, `src/game/orb-letter.ts`). How hard the hidden letters are to spot is set by `CAMO` in `orb-letter.ts`.
-
-The elf and the star read every line aloud with the browser's built-in speech, so a child who can't read yet can still play. Speech bubbles show the same words. After 25 seconds of searching, the star starts pointing the way; after 35, once she is close, it makes the hidden letter twinkle every few seconds.
-
-Both pairs of wings float over the start the whole time, just higher than she can jump. The Purple Wings are mid-tier: smaller, a third of the height, 3 seconds per flight, refilled on landing. The Rainbow Wings (two screens high, no time limit) stay out of reach for now. Once she owns wings, E puts them on or away. The star dozes off if she stands still.
+Letters are drawn by the GPU, not art: a ball-and-stick stroke font (`src/engine/text/stroke-font.ts`) lays out where the orbs go, and each letter is a flock of orbs (`src/engine/fx/swarm.ts`, `src/game/reading/orb-letter.ts`).
 
 ## Layout
 
 ```
-src/engine/   reusable, game-agnostic
-  gpu/        device setup, texture loading (premultiplied alpha), GPU mipmaps
-  render/     instanced sprite/shape batcher (one buffer upload per frame), looping parallax (and what colour it shows where)
-  anim/       sprite sheets (from tools/sprites) and the animator
-  fx/         fixed-pool particle system, formation swarms (flocks that hold a shape); no per-frame allocation
-  text/       ball-and-stick stroke font: points along the letters, for drawing them out of dots or particles
-  input/      action-based keyboard + gamepad input with buffered presses
-  audio/      sound effects (Web Audio, decoded up front, varied per play), read-aloud lines through speech synthesis
-  core/       fixed-timestep loop (120 Hz sim, interpolated rendering), math helpers
-src/game/     the opening scene: player, elf NPC, reading quest (words.ts, quest.ts, letters.ts, orb-letter.ts, star-trail.ts), effects
-src/hud/      lit-html overlay
-assets/       game-ready art and sounds, served as-is
-tools/sprites/ sprite-sheet tools: align-sheet (characters, incl. multi-sheet idle sets), pack-sheet (props, wings, companions); npm run sprites rebuilds all
-tools/audio/  cut-sounds: downloads the free sound packs, cuts and normalises each take; npm run sounds rebuilds all (needs ffmpeg)
+src/engine/        reusable, game-agnostic modules
+  core/            fixed-timestep loop (120 Hz sim, interpolated rendering), math (springs, damping, RNG), fetch, settings storage
+  gpu/             device setup, textures (premultiplied alpha, GPU mipmaps)
+  render/          instanced quad renderer (one buffer upload per frame; shape() and sprite() helpers), procedural
+                   shapes in the shader, colours, looping parallax, follow camera, asset loader
+  anim/            sprite sheets (from tools/sprites) and the animator
+  fx/              particle pool with data-driven Spray recipes, formation swarms (flocks that hold a shape)
+  physics/         boxes, reach checks (nearestInFront), terrain: ground plus one-way platforms
+  text/            stroke font: points along the letters
+  input/           action-based keyboard + gamepad input with buffered presses and typed words
+  audio/           one shared AudioContext (Mixer) with sfx/music/voice buses; sound bank, music playlist, voice-over queue
+src/game/          the reading game, built on the engine
+  config/          controls, and the audio mix (sound levels, music, voice lines)
+  world/           levels as data (parallax layers, sky, camera rest height); MEADOW is the first
+  actors/          the player (movement feel, moves, flight), NPCs (idle poses, walk/follow/hop), the star sidekick
+  prizes/          wings: styles, the wardrobe she wears (and the flight it gives), the floating pickup
+  reading/         sentences, orb letters, the sentence sign, walking letters, the clue things
+  quest/           the story's state machine, and when the voice-overs play
+  fx/              the scene's effects, the star orbs, the party, the wing ceremony
+  game.ts          composes it all: camera, draw order, her moves → effects, sounds and reactions
+src/hud/           lit-html overlay
+assets/            game-ready art and sounds, served as-is
+art/               source art and raw recordings the tools read (not in git)
+tools/sprites/     sprite-sheet tools: align-sheet (characters), pack-sheet (props, wings, companions); npm run sprites
+tools/audio/       cut-sounds (npm run sounds), fetch-music (npm run music), prep-voice; all need ffmpeg
 ```
 
-Sound effects are CC0 clips from Kenney's packs; `assets/sounds/CREDITS.md` lists each source. To swap or add one, edit `tools/audio/sounds.config.json`, run `npm run sounds`, and set its level in `src/game/sounds.ts`.
+**Adding a level:** describe it in `src/game/world/level.ts` (its layers under `assets/scenes/<level>/`, sky colour, camera height) and pass it to `Game`. Floating shelves are `Terrain` platforms (`game.terrain.platforms.push({ left, right, y })`).
 
-In development, `window.game` exposes the scene, renderer, loop and input for console debugging.
+**Adding an effect:** most bursts are a `Spray` constant (count, direction, speed, life, size, colours) launched with `particles.spray(x, y, RECIPE)`; rings and glows are one call each.
+
+Sound effects are CC0 clips from Kenney's packs and Freesound; `assets/sounds/CREDITS.md` lists each source. To swap or add one, edit `tools/audio/sounds.config.json`, run `npm run sounds`, and set its level in `src/game/config/audio.ts`. Music credits are in `assets/music/CREDITS.md`.
+
+In development, `window.game` exposes the game, renderer, loop, input, mixer, voice and music for console debugging.

@@ -1,5 +1,4 @@
 import { html, nothing, render } from 'lit-html';
-import { keyed } from 'lit-html/directives/keyed.js';
 
 export interface HudState {
   status: 'loading' | 'ready' | 'error';
@@ -19,7 +18,6 @@ export interface HudState {
   wingsWorn: boolean;
   /** Flight time left for limited wings, 0..1; -1 hides the meter. */
   flight: number;
-  toast: { id: number; title: string; body: string } | null;
   /** Stars earned in the reading quest, out of `starGoal` (the number that earns her wings). */
   stars: number;
   starGoal: number;
@@ -47,15 +45,13 @@ export class Hud {
   private readonly state: HudState = {
     status: 'loading', message: '', showHelp: false, showDebug: false,
     fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0,
-    wingName: '', wingsWorn: false, flight: -1, toast: null,
+    wingName: '', wingsWorn: false, flight: -1,
     stars: 0, starGoal: 0, muted: false, musicOff: false,
     showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false,
   };
   /** A grown-up picked a different sentence. */
   onSentence: ((id: string) => void) | null = null;
   private scheduled = false;
-  private toastTimer = 0;
-  private toastCount = 0;
   private readonly toggleHelp = () => this.update({ showHelp: !this.state.showHelp });
   private readonly toggleGrownUps = () => this.update({ showGrownUps: !this.state.showGrownUps });
   private readonly pickSentence = (e: Event) => {
@@ -84,13 +80,6 @@ export class Hud {
     }
   }
 
-  /** Shows a message card for a few seconds. */
-  toast(title: string, body: string, ms = 7000): void {
-    clearTimeout(this.toastTimer);
-    this.update({ toast: { id: ++this.toastCount, title, body } });
-    this.toastTimer = window.setTimeout(() => this.update({ toast: null }), ms);
-  }
-
   private flush(): void {
     this.scheduled = false;
     render(this.template(this.state), this.root);
@@ -106,28 +95,33 @@ export class Hud {
       </div></div>`;
     }
     return html`
-      ${s.showHelp ? this.help(s) : this.helpButton()}
-      ${s.showGrownUps ? this.grownUps(s) : this.grownUpsButton()}
+      ${s.showHelp ? this.help(s) : this.toggle('left', html`<kbd>?</kbd> Controls`, this.toggleHelp)}
+      ${s.showGrownUps ? this.grownUps(s) : this.toggle('right', 'Grown-ups', this.toggleGrownUps)}
       ${s.showDebug ? this.debug(s) : nothing}
-      ${s.toast ? keyed(s.toast.id, html`<div class="toast"><b>${s.toast.title}</b><span>${s.toast.body}</span></div>`) : nothing}
       ${s.wingName ? this.wingBadge(s) : nothing}
       ${this.starRow(s.stars, s.starGoal)}
       <div class="corner-hint"><kbd>M</kbd> sounds ${s.muted ? 'off' : 'on'} · <kbd>N</kbd> music ${s.muted || s.musicOff ? 'off' : 'on'} · <kbd>\`</kbd> stats</div>
     `;
   }
 
-  private helpButton() {
-    return html`<button class="help-toggle" tabindex="-1" aria-expanded="false" @mousedown=${this.keepFocus} @click=${this.toggleHelp}>
-      <kbd>?</kbd> Controls <span class="chevron">▾</span>
+  /** A button that opens a panel (top left or right); it takes clicks without taking the keyboard. */
+  private toggle(side: 'left' | 'right', label: unknown, onClick: () => void) {
+    return html`<button class="toggle ${side}" tabindex="-1" aria-expanded="false" @mousedown=${this.keepFocus} @click=${onClick}>
+      ${label} <span class="chevron">▾</span>
     </button>`;
+  }
+
+  /** A panel's title, with a button that folds it away again. */
+  private heading(title: unknown, closeLabel: string, onClick: () => void) {
+    return html`<h1>${title}
+      <button class="collapse" tabindex="-1" aria-label=${closeLabel} aria-expanded="true" @mousedown=${this.keepFocus} @click=${onClick}>▴</button>
+    </h1>`;
   }
 
   private help(s: HudState) {
     const row = (keys: string[], what: string) => html`<li><span>${keys.map((k) => html`<kbd>${k}</kbd>`)}</span>${what}</li>`;
     return html`<section class="panel help">
-      <h1>Earn your wings <small>reading game</small>
-        <button class="collapse" tabindex="-1" aria-label="Hide controls" aria-expanded="true" @mousedown=${this.keepFocus} @click=${this.toggleHelp}>▴</button>
-      </h1>
+      ${this.heading(html`Earn your wings <small>reading game</small>`, 'Hide controls', this.toggleHelp)}
       <ul>
         ${row(['←', '→'], 'walk')}
         ${row(['Shift'], 'hold to run')}
@@ -142,18 +136,10 @@ export class Hud {
     </section>`;
   }
 
-  private grownUpsButton() {
-    return html`<button class="grown-ups-toggle" tabindex="-1" aria-expanded="false" @mousedown=${this.keepFocus} @click=${this.toggleGrownUps}>
-      Grown-ups <span class="chevron">▾</span>
-    </button>`;
-  }
-
   private grownUps(s: HudState) {
     const picked = s.sentences.find((o) => o.id === s.sentenceId);
     return html`<section class="panel grown-ups" @keydown=${this.keepKeys}>
-      <h1>Grown-ups
-        <button class="collapse" tabindex="-1" aria-label="Hide the grown-ups panel" aria-expanded="true" @mousedown=${this.keepFocus} @click=${this.toggleGrownUps}>▴</button>
-      </h1>
+      ${this.heading('Grown-ups', 'Hide the grown-ups panel', this.toggleGrownUps)}
       <label>
         <span>The sentence (the clue to where the purple wings are)</span>
         <select .value=${s.sentenceId} ?disabled=${s.sentenceLocked} @change=${this.pickSentence}>
