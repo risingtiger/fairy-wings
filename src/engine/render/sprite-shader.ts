@@ -100,6 +100,24 @@ struct VOut {
       }
       a = 1.0 - smoothstep(-0.02 - k * 0.25, 0.02, d);
     }
+    case 8u: { // rounded square filling the quad; k = corner radius (0 sharp .. 1 round)
+      let q = abs(p) - vec2f(1.0 - k);
+      let d = length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0) - k;
+      a = 1.0 - smoothstep(-0.03, 0.0, d);
+    }
+    case 9u: { // five-point star, point up, tips touching the quad's edge; k = inner radius (0.38 classic, 0.5 chubby)
+      let k1 = vec2f(0.809016994, -0.587785252);
+      let k2 = vec2f(-k1.x, k1.y);
+      var s = vec2f(abs(p.x), -p.y);
+      s -= 2.0 * max(dot(k1, s), 0.0) * k1;
+      s -= 2.0 * max(dot(k2, s), 0.0) * k2;
+      s.x = abs(s.x);
+      s.y -= 1.0;
+      let ba = k * vec2f(-k1.y, k1.x) - vec2f(0.0, 1.0);
+      let h = clamp(dot(s, ba) / dot(ba, ba), 0.0, 1.0);
+      let d = length(s - ba * h) * sign(s.y * ba.x - s.x * ba.y);
+      a = 1.0 - smoothstep(-0.03, 0.0, d);
+    }
     default: {}
   }
   return vec4f(v.color.rgb, 1.0) * (v.color.a * a);

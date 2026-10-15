@@ -5,7 +5,7 @@
 // integrated loudness, applies one fixed gain so the voice keeps its natural dynamics, and a limiter just
 // catches any peak that gain pushes over the ceiling), so lines from different takes, voices and tools
 // all sit alike, clearly above the music and sound effects. Writes a 128 kbps mp3 (plays in
-// Chrome and Safari) named after the line's id; register it in src/game/voiceovers.ts.
+// Chrome and Safari) named after the line's id; register it in VOICE_LINES (src/game/config/audio.ts). Raw recordings live in art/voice/.
 //
 // Writes assets/voice/<id>.mp3. Needs ffmpeg on the PATH (with libmp3lame).
 //

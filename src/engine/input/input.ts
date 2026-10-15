@@ -97,6 +97,12 @@ export class Input<A extends string> {
     return true;
   }
 
+  /** Forgets everything typed so far, so a word that's been acted on can't count again. */
+  forgetTyped(): void {
+    this.typedKeys.length = 0;
+    this.typedAt.length = 0;
+  }
+
   private remember(letter: string, time: number): void {
     this.typedKeys.push(letter);
     this.typedAt.push(time);

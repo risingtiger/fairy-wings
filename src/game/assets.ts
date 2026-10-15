@@ -1,49 +1,33 @@
-import { SpriteSheet } from '../engine/anim/sprite-sheet';
+import type { SpriteSheet } from '../engine/anim/sprite-sheet';
+import type { Mixer } from '../engine/audio/mixer';
 import { SoundBank } from '../engine/audio/sound';
-import type { MipmapGenerator } from '../engine/gpu/mipmaps';
-import { createTexture, loadBitmap, loadTexture } from '../engine/gpu/texture';
-import type { SpriteRenderer, TextureBinding } from '../engine/render/sprite-renderer';
-import { SOUNDS, type SoundName } from './sounds';
+import type { Loader } from '../engine/render/loader';
+import type { ParallaxBackground } from '../engine/render/parallax';
+import { SOUNDS, SOUNDS_MANIFEST, type SoundName } from './config/audio';
+import { loadBackground, type Level } from './world/level';
 
-/** A background layer's texture. */
-export interface LayerArt {
-  binding: TextureBinding;
-}
-
-export interface IntroAssets {
-  sky: LayerArt;
-  hills: LayerArt;
-  forest: LayerArt;
-  ground: LayerArt;
+export interface Assets {
+  background: ParallaxBackground;
   fairy: SpriteSheet;
-  /** Rainbow wings (top tier). */
-  wings: SpriteSheet;
+  /** The two pairs of wings: rainbow (top tier) and purple. */
+  wingsRainbow: SpriteSheet;
   wingsPurple: SpriteSheet;
+  /** The star sidekick. */
   star: SpriteSheet;
-  /** The elf boy NPC: his idle poses. */
+  /** The elf boy: his idle poses, and his moves (walk, run, jump, throw, ...) at the same pixel scale. */
   elf: SpriteSheet;
-  /** The elf boy's moves (walk, run, jump, throw, catch, fly, ...), drawn at the same pixel scale as his idle poses. */
   elfMoves: SpriteSheet;
   sounds: SoundBank<SoundName>;
 }
 
-const base = import.meta.env.BASE_URL;
-
-export async function loadIntroAssets(device: GPUDevice, mips: MipmapGenerator, renderer: SpriteRenderer): Promise<IntroAssets> {
-  const layer = async (name: string): Promise<LayerArt> => {
-    const url = `${base}scenes/intro/${name}.png`, bitmap = await loadBitmap(url);
-    const art = { binding: renderer.bind(createTexture(device, mips, bitmap, url), { repeat: true }) };
-    bitmap.close();
-    return art;
-  };
-  // a few mips only, so neighbouring cells in the atlas never blend together
-  const sheetImage = async (url: string) => renderer.bind(await loadTexture(device, mips, url, { maxMips: 4 }));
+/** Everything the game draws and plays, loaded in parallel. */
+export async function loadAssets(loader: Loader, mixer: Mixer, level: Level): Promise<Assets> {
   // sprites/<folder>/<file>.json; most sheets have a folder of their own, named after them
-  const sheet = (folder: string, file = folder) => SpriteSheet.load(`${base}sprites/${folder}/${file}.json`, sheetImage);
-  const [sky, hills, forest, ground, fairy, wings, wingsPurple, star, elf, elfMoves, sounds] = await Promise.all([
-    layer('sky'), layer('hills'), layer('forest'), layer('ground'),
+  const sheet = (folder: string, file = folder) => loader.sheet(`${import.meta.env.BASE_URL}sprites/${folder}/${file}.json`);
+  const [background, fairy, wingsRainbow, wingsPurple, star, elf, elfMoves, sounds] = await Promise.all([
+    loadBackground(loader, level),
     sheet('fairy'), sheet('wings'), sheet('wings-purple'), sheet('star'), sheet('elf'), sheet('elf', 'elf-moves'),
-    SoundBank.load(`${base}sounds/sounds.json`, SOUNDS),
+    SoundBank.load(mixer, SOUNDS_MANIFEST, SOUNDS),
   ]);
-  return { sky, hills, forest, ground, fairy, wings, wingsPurple, star, elf, elfMoves, sounds };
+  return { background, fairy, wingsRainbow, wingsPurple, star, elf, elfMoves, sounds };
 }

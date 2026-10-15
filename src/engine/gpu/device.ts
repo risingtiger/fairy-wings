@@ -21,22 +21,37 @@ export async function initGpu(canvas: HTMLCanvasElement, onLost: (message: strin
   return { device, context, format, canvas };
 }
 
-/** Keeps the canvas drawing buffer matched to its on-screen size in device pixels. */
-export function autoResize(canvas: HTMLCanvasElement, maxDimension: number, renderScale = 1): void {
-  const apply = (w: number, h: number) => {
-    canvas.width = Math.max(1, Math.min(maxDimension, Math.round(w * renderScale)));
-    canvas.height = Math.max(1, Math.min(maxDimension, Math.round(h * renderScale)));
-  };
-  const observer = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const dpcb = entry.devicePixelContentBoxSize?.[0];
-      if (dpcb) apply(dpcb.inlineSize, dpcb.blockSize);
-      else apply(entry.contentBoxSize[0].inlineSize * devicePixelRatio, entry.contentBoxSize[0].blockSize * devicePixelRatio);
+/**
+ * Keeps the canvas drawing buffer matched to its on-screen size in device pixels, scaled down if need
+ * be so it's at most `maxHeight` tall (fewer pixels to fill on a modest GPU; the browser scales it up).
+ */
+export class CanvasSize {
+  private width = 1;
+  private height = 1;
+  private cap = Infinity;
+
+  constructor(private readonly canvas: HTMLCanvasElement, private readonly maxDimension: number) {
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const dpcb = entry.devicePixelContentBoxSize?.[0], box = entry.contentBoxSize[0];
+        this.width = dpcb ? dpcb.inlineSize : box.inlineSize * devicePixelRatio;
+        this.height = dpcb ? dpcb.blockSize : box.blockSize * devicePixelRatio;
+        this.apply();
+      }
+    });
+    try {
+      observer.observe(canvas, { box: 'device-pixel-content-box' });
+    } catch {
+      observer.observe(canvas); // Safari: no device-pixel-content-box
     }
-  });
-  try {
-    observer.observe(canvas, { box: 'device-pixel-content-box' });
-  } catch {
-    observer.observe(canvas); // Safari: no device-pixel-content-box
+  }
+
+  get maxHeight(): number { return this.cap; }
+  set maxHeight(value: number) { this.cap = value; this.apply(); }
+
+  private apply(): void {
+    const scale = Math.min(1, this.cap / this.height), max = this.maxDimension;
+    this.canvas.width = Math.max(1, Math.min(max, Math.round(this.width * scale)));
+    this.canvas.height = Math.max(1, Math.min(max, Math.round(this.height * scale)));
   }
 }

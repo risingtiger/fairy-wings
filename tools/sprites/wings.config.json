@@ -1,5 +1,5 @@
 {
-  "source": "exec-7408d6ed-570b-4f10-b16a-77aca66d9194.png",
+  "source": "art/wings-rainbow.png",
   "out": "assets/sprites/wings/wings",
   "frames": ["w01", "w02", "w03", "w04", "w05", "w06", "w07", "w08", "w09", "w10", "w11", "w12"],
   "alphaFloor": 24,
@@ -9,5 +9,9 @@
   "fringe": 3,
   "pivot": { "mode": "waist", "range": [0.45, 0.85] },
   "padding": 6,
-  "_notes": { "pivot": "the wing root: where the big and small wing meet (narrowest vertical slice)" }
+  "layout": [["w03"]],
+  "_notes": {
+    "pivot": "the wing root: where the big and small wing meet (narrowest vertical slice)",
+    "layout": "only the frame the game draws (WING_STYLES.rainbow.frame); every pose still sets the cell size and pivot"
+  }
 }

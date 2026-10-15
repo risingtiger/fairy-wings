@@ -1,5 +1,5 @@
 {
-  "source": "exec-840e2e38-d3ae-448c-bb16-caaa6829ee45.png",
+  "source": "art/star.png",
   "out": "assets/sprites/star/star",
   "frames": ["idle", "happy", "curious", "float", "floatBack", "front", "twinkle", "dash", "cheer", "spin", "ouch", "sleep"],
   "alphaFloor": 24,

@@ -1,29 +1,15 @@
+import type { SpriteSheet } from '../anim/sprite-sheet';
 import type { Gpu } from '../gpu/device';
 import { createWhiteTexture, type Texture } from '../gpu/texture';
+import { WHITE } from './color';
 import { SPRITE_SHADER } from './sprite-shader';
 
 export const Blend = { Alpha: 0, Additive: 1 } as const;
 export type Blend = (typeof Blend)[keyof typeof Blend];
 
-/** Procedural shapes drawn by fs_shape (see sprite-shader.ts). */
-export const Shape = { Glow: 0, Sparkle: 1, Ring: 2, Crescent: 3, Orb: 4, Disc: 5, Beam: 6, Heart: 7 } as const;
+/** Procedural shapes drawn by fs_shape (see sprite-shader.ts); each takes one parameter. */
+export const Shape = { Glow: 0, Sparkle: 1, Ring: 2, Crescent: 3, Orb: 4, Disc: 5, Beam: 6, Heart: 7, Box: 8, Star: 9 } as const;
 export type Shape = (typeof Shape)[keyof typeof Shape];
-
-/** Packs a colour: r, g, b in 0..255, alpha in 0..1. */
-export function rgba(r: number, g: number, b: number, a = 1): number {
-  return ((r & 255) | ((g & 255) << 8) | ((b & 255) << 16) | ((Math.round(a * 255) & 255) << 24)) >>> 0;
-}
-
-/** Packs a colour from hue (turns, wraps), saturation and lightness (0..1), alpha 0..1. */
-export function hsla(h: number, s: number, l: number, a = 1): number {
-  const k = (n: number) => (n + (h - Math.floor(h)) * 12) % 12;
-  const c = s * Math.min(l, 1 - l);
-  const f = (n: number) => Math.round(255 * (l - c * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
-  return rgba(f(0), f(8), f(4), a);
-}
-
-/** The same colour with a new opacity (0..1). */
-export const withAlpha = (color: number, a: number) => ((color & 0x00ffffff) | ((Math.round(Math.max(0, Math.min(1, a)) * 255) & 255) << 24)) >>> 0;
 
 /** Scratch description of one quad: reset, fill, then draw. Reused to avoid per-sprite allocation. */
 export class Quad {
@@ -31,7 +17,7 @@ export class Quad {
   u0 = 0; v0 = 0; u1 = 1; v1 = 1;
   originX = 0.5; originY = 0.5;
   rotation = 0; skew = 0; saturation = 1; flash = 0;
-  color = 0xffffffff;
+  color = WHITE;
   fog = 0;
   /** Soft fade at the top / bottom edge, as a fraction of the quad height. */
   fadeTop = 0; fadeBottom = 0;
@@ -42,22 +28,17 @@ export class Quad {
     this.originX = this.originY = 0.5;
     this.rotation = this.skew = this.flash = 0;
     this.saturation = 1;
-    this.color = 0xffffffff;
+    this.color = WHITE;
     this.fog = 0;
     this.fadeTop = this.fadeBottom = 0;
     return this;
   }
-
-  /** For shapes: the kind and its parameter travel in the uv slots. */
-  shape(kind: Shape, param = 0): this {
-    this.u0 = kind; this.v0 = param;
-    return this;
-  }
 }
 
+/** A texture ready to draw. It can be swapped in place for another resolution of the same image (see Loader.setTier). */
 export interface TextureBinding {
-  readonly texture: Texture;
-  readonly bindGroup: GPUBindGroup;
+  texture: Texture;
+  bindGroup: GPUBindGroup;
 }
 
 interface Batch { pipeline: number; bindGroup: GPUBindGroup; view: number; first: number; count: number }
@@ -70,6 +51,8 @@ const PIPE_TEXTURE = 0, PIPE_SHAPE = 2; // + Blend
 /**
  * Instanced quad renderer. Every quad of a frame lands in one vertex buffer upload; consecutive quads
  * with the same pipeline, texture and view collapse into a single draw.
+ *
+ * Draw with shape() and sprite(), or fill `quad` by hand and call drawShape() / drawTexture().
  */
 export class SpriteRenderer {
   readonly quad = new Quad();
@@ -87,7 +70,7 @@ export class SpriteRenderer {
   private originX = 0;
   private originY = 0;
   private warnedFull = false;
-  private readonly whiteBinding: TextureBinding;
+  private readonly white: GPUBindGroup;
 
   private constructor(
     private readonly device: GPUDevice,
@@ -102,7 +85,7 @@ export class SpriteRenderer {
     this.data = new ArrayBuffer(capacity * QUAD_FLOATS * 4);
     this.f32 = new Float32Array(this.data);
     this.u32 = new Uint32Array(this.data);
-    this.whiteBinding = this.bind(createWhiteTexture(device));
+    this.white = this.bind(createWhiteTexture(device)).bindGroup;
   }
 
   static async create(gpu: Gpu, capacity = 16384): Promise<SpriteRenderer> {
@@ -118,41 +101,24 @@ export class SpriteRenderer {
       ],
     });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [viewLayout, textureLayout] });
+    const formats: GPUVertexFormat[] = ['float32x2', 'float32x2', 'float32x4', 'float32x2', 'float32x4', 'unorm8x4', 'unorm8x4', 'float32x4'];
+    const offsets = [0, 8, 16, 32, 40, 56, 60, 64];
     const vertex: GPUVertexState = {
       module,
       entryPoint: 'vs',
-      buffers: [{
-        arrayStride: QUAD_FLOATS * 4,
-        stepMode: 'instance',
-        attributes: [
-          { shaderLocation: 0, offset: 0, format: 'float32x2' },
-          { shaderLocation: 1, offset: 8, format: 'float32x2' },
-          { shaderLocation: 2, offset: 16, format: 'float32x4' },
-          { shaderLocation: 3, offset: 32, format: 'float32x2' },
-          { shaderLocation: 4, offset: 40, format: 'float32x4' },
-          { shaderLocation: 5, offset: 56, format: 'unorm8x4' },
-          { shaderLocation: 6, offset: 60, format: 'unorm8x4' },
-          { shaderLocation: 7, offset: 64, format: 'float32x4' },
-        ],
-      }],
+      buffers: [{ arrayStride: QUAD_FLOATS * 4, stepMode: 'instance', attributes: formats.map((format, i) => ({ shaderLocation: i, offset: offsets[i], format })) }],
     };
     const blends: GPUBlendState[] = [
       { color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } },
       { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } },
     ];
-    const make = (entryPoint: string, blend: GPUBlendState, label: string) =>
-      device.createRenderPipelineAsync({
-        label, layout, vertex,
-        fragment: { module, entryPoint, targets: [{ format, blend }] },
-        primitive: { topology: 'triangle-strip' },
-      });
     // order matches PIPE_TEXTURE / PIPE_SHAPE + Blend
-    const pipelines = await Promise.all([
-      make('fs_texture', blends[0], 'sprites/alpha'),
-      make('fs_texture', blends[1], 'sprites/additive'),
-      make('fs_shape', blends[0], 'shapes/alpha'),
-      make('fs_shape', blends[1], 'shapes/additive'),
-    ]);
+    const pipelines = await Promise.all(['fs_texture', 'fs_texture', 'fs_shape', 'fs_shape'].map((entryPoint, i) =>
+      device.createRenderPipelineAsync({
+        label: `${entryPoint}/${i % 2 ? 'additive' : 'alpha'}`, layout, vertex,
+        fragment: { module, entryPoint, targets: [{ format, blend: blends[i % 2] }] },
+        primitive: { topology: 'triangle-strip' },
+      })));
     const instanceBuffer = device.createBuffer({ label: 'quads', size: capacity * QUAD_FLOATS * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     const uniformBuffer = device.createBuffer({ label: 'views', size: MAX_VIEWS * VIEW_STRIDE, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const viewBindGroup = device.createBindGroup({ layout: viewLayout, entries: [{ binding: 0, resource: { buffer: uniformBuffer, size: 16 } }] });
@@ -164,12 +130,12 @@ export class SpriteRenderer {
   }
 
   /** Creates the bind group for a texture once, at load time. `repeat` wraps horizontally (looping layers). */
-  bind(texture: Texture, options: { repeat?: boolean } = {}): TextureBinding {
+  bind(texture: Texture, repeat = false): TextureBinding {
     const bindGroup = this.device.createBindGroup({
       label: texture.url,
       layout: this.textureLayout,
       entries: [
-        { binding: 0, resource: options.repeat ? this.samplers.repeat : this.samplers.clamp },
+        { binding: 0, resource: repeat ? this.samplers.repeat : this.samplers.clamp },
         { binding: 1, resource: texture.view },
       ],
     });
@@ -191,19 +157,49 @@ export class SpriteRenderer {
     const o = (this.viewCount * VIEW_STRIDE) / 4;
     this.viewData[o] = 2 / width;
     this.viewData[o + 1] = -2 / height; // world y points down, clip y points up
-    this.viewData[o + 2] = 0;
-    this.viewData[o + 3] = 0;
     this.viewCount++;
     this.originX = centreX;
     this.originY = centreY;
+  }
+
+  /** A procedural shape centred on (x, y), `w` by `h`; `param` tunes it (see the shader). */
+  shape(kind: Shape, x: number, y: number, w: number, h: number, color: number, blend: Blend = Blend.Alpha, param = 0, rotation = 0): void {
+    const q = this.quad.reset();
+    q.x = x; q.y = y; q.w = w; q.h = h;
+    q.u0 = kind; q.v0 = param; // shapes carry their kind and parameter in the uv slots
+    q.color = color;
+    q.rotation = rotation;
+    this.drawShape(blend);
+  }
+
+  /**
+   * Fills `quad` with a sheet frame at (x, y) (the sheet's pivot), `sx`/`sy` world units per sheet
+   * pixel (negative sx mirrors). Adjust anything else on the returned quad, then drawTexture(sheet.binding).
+   */
+  spriteQuad(sheet: SpriteSheet, frame: number, x: number, y: number, sx: number, sy: number): Quad {
+    const f = sheet.frames[frame], q = this.quad.reset();
+    q.x = x; q.y = y;
+    q.w = sheet.cellWidth * sx; q.h = sheet.cellHeight * sy;
+    q.originX = sheet.originX; q.originY = sheet.originY;
+    q.u0 = f.u0; q.v0 = f.v0; q.u1 = f.u1; q.v1 = f.v1;
+    return q;
+  }
+
+  /** Draws a sheet frame in one go (see spriteQuad). */
+  sprite(sheet: SpriteSheet, frame: number, x: number, y: number, sx: number, sy: number, color = WHITE, rotation = 0, blend: Blend = Blend.Alpha): void {
+    const q = this.spriteQuad(sheet, frame, x, y, sx, sy);
+    q.color = color;
+    q.rotation = rotation;
+    this.drawTexture(sheet.binding, blend);
   }
 
   drawTexture(binding: TextureBinding, blend: Blend = Blend.Alpha): void {
     this.push(PIPE_TEXTURE + blend, binding.bindGroup);
   }
 
-  drawShape(blend: Blend = Blend.Additive): void {
-    this.push(PIPE_SHAPE + blend, this.whiteBinding.bindGroup);
+  /** Draws `quad` as a procedural shape: set u0 to the Shape and v0 to its parameter. */
+  drawShape(blend: Blend = Blend.Alpha): void {
+    this.push(PIPE_SHAPE + blend, this.white);
   }
 
   render(pass: GPURenderPassEncoder): void {

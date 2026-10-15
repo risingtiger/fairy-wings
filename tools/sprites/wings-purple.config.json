@@ -1,5 +1,5 @@
 {
-  "source": "purplewings.png",
+  "source": "art/wings-purple.png",
   "out": "assets/sprites/wings-purple/wings-purple",
   "frames": ["w01"],
   "alphaFloor": 24,

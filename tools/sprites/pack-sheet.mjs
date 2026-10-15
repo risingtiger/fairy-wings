@@ -12,7 +12,7 @@
 // Writes the same JSON format as align-sheet.mjs, so the game loads both the same way.
 import fs from 'node:fs';
 import path from 'node:path';
-import { decodePNG, encodePNG } from './png.mjs';
+import { bleedEdges, decodePNG, encodePNG } from './png.mjs';
 
 const args = process.argv.slice(2);
 const cfgPath = args.find((a) => !a.startsWith('--'));
@@ -174,22 +174,7 @@ if (down > 1) {
 }
 
 // bleed edge colours into transparent neighbours so filtering never pulls in black
-for (let pass = 0; pass < 4; pass++) {
-  const fill = [];
-  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
-    const t = (y * SW + x) * 4;
-    if (sheet[t + 3] || sheet[t] || sheet[t + 1] || sheet[t + 2]) continue;
-    let r = 0, g = 0, b = 0, n = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const xx = x + dx, yy = y + dy;
-      if (xx < 0 || yy < 0 || xx >= SW || yy >= SH) continue;
-      const u = (yy * SW + xx) * 4;
-      if (sheet[u + 3] || sheet[u] || sheet[u + 1] || sheet[u + 2]) { r += sheet[u]; g += sheet[u + 1]; b += sheet[u + 2]; n++; }
-    }
-    if (n) fill.push(t, Math.round(r / n) || 1, Math.round(g / n) || 1, Math.round(b / n) || 1);
-  }
-  for (let j = 0; j < fill.length; j += 4) { sheet[fill[j]] = fill[j + 1]; sheet[fill[j] + 1] = fill[j + 2]; sheet[fill[j] + 2] = fill[j + 3]; }
-}
+bleedEdges(sheet, SW, SH);
 fs.mkdirSync(path.dirname(cfg.out), { recursive: true });
 encodePNG(cfg.out + '.png', SW, SH, sheet);
 fs.writeFileSync(cfg.out + '.json', JSON.stringify(meta, null, 2) + '\n');
