@@ -13,12 +13,13 @@ Open http://localhost:5173 in a browser with WebGPU: recent Chrome or Edge, or S
 
 | Key | Action |
 |---|---|
+| finger / mouse | point the wand at a letter · swipe across a word (while reading) |
 | ← → / A D | walk |
 | Shift | hold to run |
 | ↓ / S | crouch |
 | Space / ↑ / W | jump (hold for higher); in the air with wings on, fly (hold to climb, ↓ to dive) |
-| J / Z | wave the wand · knocks a walking letter off the screen |
-| L | catch the missing letter (and the thing the wings hide in) |
+| J / Z | wave the wand · bops whatever's in front of her |
+| L | catch the thing the wings hide in |
 | K / X | cast a spell |
 | H | get hurt (demo) |
 | E / C | switch wings / put them away (once found) |
@@ -29,7 +30,13 @@ Open http://localhost:5173 in a browser with WebGPU: recent Chrome or Edge, or S
 
 Gamepads use the standard mapping: stick to move, A jump, Y catch (L), X wand (J), B cast, LB wings, RB run.
 
-**The story.** The fairy is out to earn her wings. The elf boy says hello, then tosses up the first word of a sentence (the grown-ups' panel picks which). It floats to the top of the screen; one letter glows gold for a moment, then melts into lights and floats away. Out on the meadow letters come walking along on little legs: she jumps over the wrong ones (or bounces off their heads), knocks them away with her wand, and catches the missing one with L. A grown-up types `ok` when she says its sound, and again when she reads the word; the elf runs in with a star and the next word. Once the whole sentence is read (and `ok`'d) there's a party, then the elf leads her to a field of balls, boxes and stars. The sentence says which one the Purple Wings hide in; she catches it, and a light show gives her the wings. The elf follows her about from then on.
+**The story.** The fairy is out to earn her wings. The elf boy says hello, then tosses a whole sentence up to the top of the screen (the grown-ups' panel picks which); it's the clue to where the wings are. She stands by him and reads it with her wand, and a grown-up beside her confirms each step by typing `ok`:
+
+1. She points at the letter she's on (finger on an iPad, or the mouse). She raises her wand, a swirl of sparkles flows from it to the letter, and the letter shimmers gold. Pointing anywhere else (a letter further on, say) and the line dissolves and the letter goes dark until she comes back to it.
+2. She says its sound; the grown-up types `ok`. The letter pops back to normal, and the next one lights only once she points at it.
+3. With every sound said, she puts her finger on the word's first letter and swipes quickly to the right: the word shimmers and fizzes, as often as she likes. She reads it out; the grown-up types `ok`. The word hops for joy and gives her a star.
+
+After the last word the elf says she's found them all; she reads the whole sentence (pointing and swiping freely), the grown-up types `ok` once more, and there's a party. Then the elf leads her to a field of balls, boxes and stars. The sentence says which one the Purple Wings hide in; she catches it (L), and a light show gives her the wings. The elf follows her about from then on. An `ok` typed while she isn't pointing at the letter, or before she's swiped the word, doesn't count.
 
 Letters are drawn by the GPU, not art: a ball-and-stick stroke font (`src/engine/text/stroke-font.ts`) lays out where the orbs go, and each letter is a flock of orbs (`src/engine/fx/swarm.ts`, `src/game/reading/orb-letter.ts`).
 
@@ -45,16 +52,16 @@ src/engine/        reusable, game-agnostic modules
   fx/              particle pool with data-driven Spray recipes, formation swarms (flocks that hold a shape)
   physics/         boxes, reach checks (nearestInFront), terrain: ground plus one-way platforms
   text/            stroke font: points along the letters
-  input/           action-based keyboard + gamepad input with buffered presses and typed words
+  input/           action-based keyboard + gamepad input with buffered presses and typed words; the primary pointer (finger, pen or mouse)
   audio/           one shared AudioContext (Mixer) with sfx/music/voice buses; sound bank, music playlist, voice-over queue
 src/game/          the reading game, built on the engine
   config/          controls, and the audio mix (sound levels, music, voice lines)
   world/           levels as data (parallax layers, sky, camera rest height); MEADOW is the first
   actors/          the player (movement feel, moves, flight), NPCs (idle poses, walk/follow/hop), the star sidekick
   prizes/          wings: styles, the wardrobe she wears (and the flight it gives), the floating pickup
-  reading/         sentences, orb letters, the sentence sign, walking letters, the clue things
+  reading/         sentences, orb letters, the sentence sign, the read-along (pointing, sounding out, swiping), the clue things
   quest/           the story's state machine, and when the voice-overs play
-  fx/              the scene's effects, the star orbs, the party, the wing ceremony
+  fx/              the scene's effects, the star orbs, the wand stream, the party, the wing ceremony
   game.ts          composes it all: camera, draw order, her moves → effects, sounds and reactions
 src/hud/           lit-html overlay
 assets/            game-ready art and sounds, served as-is; assets/low/ holds the half-size art

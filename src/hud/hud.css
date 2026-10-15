@@ -14,6 +14,11 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #1e94fb;
+  /* she points at the screen with her finger: no text selection, callouts or tap highlights */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #game {

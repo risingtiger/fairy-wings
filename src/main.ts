@@ -5,6 +5,7 @@ import { GameLoop } from './engine/core/loop';
 import { load, loadFlag, save } from './engine/core/storage';
 import { CanvasSize, GpuUnsupportedError, initGpu } from './engine/gpu/device';
 import { Input } from './engine/input/input';
+import { Pointer } from './engine/input/pointer';
 import { Loader } from './engine/render/loader';
 import { chooseTier, QUALITY, SlowFrameWatch } from './engine/render/quality';
 import { SpriteRenderer } from './engine/render/sprite-renderer';
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
   music?.start(); // the browser holds it until the first key or tap
   voice.onSpeakingChange((speaking) => music?.duck(speaking ? MUSIC.duck : 0, speaking ? MUSIC.duckIn : MUSIC.duckOut)); // music steps back while someone talks
   const input = new Input(window, ACTIONS, BINDINGS);
+  const pointer = new Pointer(canvas); // her finger (or the mouse), pointing her wand at the words
 
   // a guessed high tier that can't keep up drops to low, and starts there from then on
   const slowWatch = guessed && tier === 'high' ? new SlowFrameWatch(() => {
@@ -96,7 +98,7 @@ async function main(): Promise<void> {
       }
     },
     update(dt, now) {
-      game.update(dt, now, input);
+      game.update(dt, now, input, pointer);
       cues.update();
     },
     render(alpha, now) {
@@ -128,7 +130,7 @@ async function main(): Promise<void> {
 
   hud.update({ status: 'ready' });
   loop.start();
-  if (import.meta.env.DEV) Object.assign(window, { game: { game, renderer, loader, canvasSize, loop, input, voice, music, mixer } }); // console debugging
+  if (import.meta.env.DEV) Object.assign(window, { game: { game, renderer, loader, canvasSize, loop, input, pointer, voice, music, mixer } }); // console debugging
 }
 
 main().catch((error: unknown) => {

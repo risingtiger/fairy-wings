@@ -1,31 +1,24 @@
-/** One word of the sentence; `missing` is the letter she has to remember and go and catch. */
-export interface Round {
-  word: string;
-  missing: number;
-}
-
 /** The things the wings can hide in, and the others lying about to make her read carefully. */
 type ThingShape = 'ball' | 'box' | 'star';
 export type ThingColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'orange' | 'pink';
 export interface ThingLook { shape: ThingShape; color: ThingColor; big?: boolean }
 
 /**
- * A sentence the elf builds up word by word; read together, it says where the purple wings are
- * hiding. `target` is the thing that holds them; `decoys` are the looks of everything lying around it
- * (repeated as needed, so a few looks make a whole field). `hint` is for the grown-up picking it.
+ * A sentence she reads, sound by sound and word by word; read together, it says where the purple
+ * wings are hiding. `target` is the thing that holds them; `decoys` are the looks of everything lying
+ * around it (repeated as needed, so a few looks make a whole field). `hint` is for the grown-up picking it.
  */
 export interface Sentence {
   id: string;
   text: string;
   hint: string;
-  rounds: readonly Round[];
+  words: readonly string[];
   target: ThingLook;
   decoys: readonly ThingLook[];
 }
 
-/** Every word misses its first letter (for "I" and "A" that's the whole word). */
 const sentence = (id: string, text: string, hint: string, target: ThingLook, decoys: ThingLook[]): Sentence => ({
-  id, text, hint, target, decoys, rounds: text.split(' ').map((word) => ({ word, missing: 0 })),
+  id, text, hint, target, decoys, words: text.split(' '),
 });
 
 const OTHER_COLORS: ThingColor[] = ['blue', 'green', 'yellow', 'purple', 'orange', 'pink'];

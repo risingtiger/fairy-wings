@@ -1,6 +1,5 @@
 import type { SoundBank } from '../../engine/audio/sound';
 import type { Input } from '../../engine/input/input';
-import { box, overlaps, placeBox } from '../../engine/physics/collide';
 import { rgba } from '../../engine/render/color';
 import type { SpriteRenderer } from '../../engine/render/sprite-renderer';
 import type { Npc } from '../actors/npc';
@@ -10,10 +9,11 @@ import type { SoundName } from '../config/audio';
 import type { Action } from '../config/controls';
 import type { Effects } from '../fx/effects';
 import { StarOrbs } from '../fx/star-orbs';
+import { WandStream } from '../fx/wand-stream';
 import { ClueField, type ClueThing } from '../reading/clue-things';
-import { LetterParade, type LetterWalker } from '../reading/letter-walker';
+import { ReadAlong, type Aim } from '../reading/read-along';
 import { SentenceSign } from '../reading/sentence-sign';
-import { SENTENCES, type Round, type Sentence } from '../reading/words';
+import { SENTENCES, type Sentence } from '../reading/words';
 
 export const QUEST = {
   /**
@@ -23,57 +23,48 @@ export const QUEST = {
   wingsLeaveAfter: 1.6,
   wingsHideFor: 2.4,
   /**
-   * The word is pinned to the screen: centred across it, this far below the top edge (world units at
-   * the 1080-tall view), just under the HUD's row of stars.
+   * The sentence is pinned to the screen, centred across it: its letters' top edge this far below the
+   * top (world units at the 1080-tall view, just under the HUD's row of stars), and the tallest they
+   * may be (a long sentence or a narrow screen gets smaller ones).
    */
-  wordFromTop: 190,
-  letterHeight: 100,
-  /** She's reached the elf: this close, she gets her word. */
+  sentenceTop: 150,
+  letterHeight: 130,
+  /** She's reached the elf: this close, he puts the sentence up. */
   talkRange: 230,
   /** The elf waves once she's this close (and stops when she's back past `greetLeave`). */
   greetRange: 420,
   greetLeave: 520,
   /**
    * The first time she reaches him, the elf says hello (three voice-over lines, see VoiceCues) before
-   * tossing the first word up: when each line starts (s), each about 2.5 s after the one before it ends,
+   * tossing the sentence up: when each line starts (s), each about 2.5 s after the one before it ends,
    * and how long it all takes.
    */
   helloLines: [0, 13.2, 23.4] as const,
   helloFor: 30,
   /** Seconds he keeps his hand up waving once his hello is over (he waves all through it, too). */
   waveAfterHello: 15,
-  /** Seconds the new word's missing letter glows gold, for her to remember, before it floats away. */
-  memorise: 3,
   /**
-   * The grown-up check. Once the letter is back in the word, the game quietly waits (nothing on
-   * screen says so) until a grown-up has heard the child read the word aloud and types this on the
-   * keyboard; only then does the word celebrate and the elf bring her star.
+   * The grown-up's word. Nothing on screen asks for it: a grown-up types it on the keyboard once
+   * they've heard her say a letter's sound (while she points at it), again once she has swiped across
+   * the word and read it out, and once more for the whole sentence at the end.
    */
   grownUpWord: 'ok',
-  /** Seconds the caught letter jumps for joy before it floats up beside the sidekick. */
-  cheerFor: 0.9,
   /**
-   * There it waits for the grown-up's first word (they ask her for the letter's sound), and stays at
-   * least this long (s), so it's seen to arrive, before flying up into the word.
+   * Her wand goes up while a finger is on the screen, or while the mouse is anywhere above this many
+   * letter heights below the letters (resting lower down, it stays down).
    */
-  hoverAtLeast: 1.2,
-  /** Where it hangs beside the sidekick: this far out from its middle, on the side away from her, and this far below it. */
-  hoverSide: 135,
-  hoverBelow: 10,
-  /** The elf, bringing her star: his running speed (he stops in the middle of the screen). */
-  elfRunSpeed: 980,
-  /** From his waving hand: how long the new star waits before it flies up to join the sidekick's swirl. */
+  wandReach: 2.5,
+  /** A word read: its star pops out this far below it (units), joins the sidekick's swirl after `starRise` s, and the next word starts after `wordCheerFor` s. */
+  starDrop: 150,
   starRise: 1.1,
+  wordCheerFor: 2.4,
+  /** Each sound said chimes a little higher along the word: this much faster per letter. */
+  chimeStep: 0.09,
+  /** The elf running back to fetch her, leading her to the wings. */
+  elfRunSpeed: 980,
   /**
-   * Once he's there, waving: seconds before he says "Nice! You found it!" (his voice-over line, see
-   * VoiceCues), how long that line is, and how long after it he tosses up the next word.
-   */
-  praiseAfter: 2,
-  praiseFor: 2.9,
-  nextWordAfter: 1.5,
-  /**
-   * The last word: he says "You found all the words!" (this long, see VoiceCues), then waits for the
-   * grown-up's "ok" once she's read the whole sentence out, then the party (see Party), then
+   * After the last word: he says "You found all the words!" (this long, see VoiceCues), then waits for
+   * the grown-up's "ok" once she's read the whole sentence out, then the party (see Party), then
    * "Let's go get the wings!" (this long) before he sets off.
    */
   allWordsFor: 3.9,
@@ -120,53 +111,51 @@ export interface QuestEvents {
 export interface QuestView { x: number; y: number; width: number; height: number; wallX: number }
 
 export type Phase =
-  | 'intro' | 'wingsHide' | 'greet' | 'hello'
-  | 'toss' | 'memorise' | 'vanish' | 'hunt' | 'caught' | 'hover' | 'flying' | 'confirm' | 'elfRun' | 'give' | 'praise'
+  | 'intro' | 'wingsHide' | 'greet' | 'hello' | 'toss' | 'read' | 'wordCheer'
   | 'allWords' | 'readAll' | 'party' | 'letsGo' | 'lead' | 'seek' | 'opening' | 'wings' | 'wingsTalk' | 'free';
 
 /** Phases in which the elf moves about on his own (rather than standing and watching her). */
-const ELF_MOVES: ReadonlySet<Phase> = new Set(['elfRun', 'lead', 'seek', 'opening', 'wings', 'free']);
-/** Phases in which the grown-up's word counts towards the letter's sound and the word read out. */
-const LISTENING: ReadonlySet<Phase> = new Set(['caught', 'hover', 'flying', 'confirm']);
+const ELF_MOVES: ReadonlySet<Phase> = new Set(['lead', 'seek', 'opening', 'wings', 'free']);
+/** Phases in which she stands still by the elf, reading (the keyboard is the grown-up's, for typing "ok"). */
+const READING: ReadonlySet<Phase> = new Set(['toss', 'read', 'wordCheer', 'allWords', 'readAll', 'party', 'letsGo']);
+/** ...and in which she can point her wand at the words. */
+const POINTING: ReadonlySet<Phase> = new Set(['read', 'readAll']);
+/** Phases in which the grown-up's word counts: a sound or a word (see ReadAlong.confirm), or the whole sentence. */
+const LISTENING: ReadonlySet<Phase> = new Set(['read', 'allWords', 'readAll']);
 
 /** Leading her to the wings: running on ahead, waiting for her, running back to fetch her, or waving her on. */
 type Lead = 'run' | 'wait' | 'fetch' | 'beckon';
 
 /**
  * The reading quest, told without words. At the start both pairs of wings flutter over the meadow,
- * then fly off to hide. She walks up to the elf; he tosses up the first word of a sentence, and it
- * floats to the top of the screen and stays there. One letter glows gold for a moment, for her to
- * remember, then melts into lights and floats away, leaving a gap. Off she goes to the right, where
- * letters come walking along on little legs. The wrong ones bump her: she jumps over them (or bounces
- * off their heads), or knocks them off with her wand and they tumble away; the right one she catches
- * (L), and it jumps for joy and floats up beside the sidekick (knock the right one off and she has to
- * find it again further on). She says its sound and a grown-up types "ok"; it flies up into the gap.
- * She reads the word aloud, the grown-up types "ok" again, and the elf comes running in, waving, with a
- * star, says well done and tosses up the next word beside it. Once every word is up he says she found
- * them all; she reads the whole sentence, the grown-up types "ok", and there's a party of lights.
- * "Let's go get the wings!": he leads her off to the right, where balls, boxes and stars float about.
- * The sentence says which one the purple wings are hiding in; she catches it (L), it bursts open, and
- * the wings are hers. Then he says so, and follows her about wherever she goes.
+ * then fly off to hide. She walks up to the elf; he tosses a sentence up, and it floats to the top of
+ * the screen and stays there. She stands and reads it with her wand (see ReadAlong): pointing at each
+ * letter in turn while she says its sound (a grown-up types "ok" each time), then swiping across the
+ * word and reading it out ("ok" again). Each word read hops for joy and gives her a star. Once she's
+ * read every word, he says she found them all; she reads the whole sentence, the grown-up types "ok",
+ * and there's a party of lights. "Let's go get the wings!": he leads her off to the right, where balls,
+ * boxes and stars float about. The sentence says which one the purple wings are hiding in; she catches
+ * it (L), it bursts open, and the wings are hers. Then he says so, and follows her about wherever she goes.
  */
 export class ReadingQuest {
   phase: Phase = 'intro';
-  readonly sign: SentenceSign;
   readonly starOrbs = new StarOrbs();
-  readonly parade = new LetterParade();
+  private readonly sign: SentenceSign;
+  private readonly reader: ReadAlong;
+  /** The magic from her wand to the letter she points at (screen space, like the sentence). */
+  private readonly stream = new WandStream();
   /** The things the wings hide among (out once he leads her off to find them). */
   readonly field = new ClueField();
-  /** The sentence she's building (a grown-up can pick another one until the first word goes up). */
+  /** The sentence she reads (a grown-up can pick another one until it goes up). */
   sentence: Sentence = SENTENCES[0];
-  private round = 0;
   private phaseTime = 0;
-  /** The latest frame timestamp (ms), and when the wait for the grown-up's word began. */
-  private now = 0;
+  /** When the current wait for the grown-up's word began (frame timestamp, ms): anything typed before it doesn't count. */
   private confirmSince = 0;
-  /** The grown-up's two checks this round: once she's said the caught letter's sound, and once she's read the whole word. */
-  private soundOk = false;
-  private wordOk = false;
+  /** The grown-up has said she read the whole sentence. */
+  private sentenceOk = false;
+  /** How many sounds she's said in the word she's on (each chimes a little higher). */
+  private chime = 0;
   private greeted = false;
-  private caught: LetterWalker | null = null;
   /** She has moved (the wings fly off a moment after). */
   private moved = false;
   private lead: Lead = 'run';
@@ -177,8 +166,7 @@ export class ReadingQuest {
   private readonly startX: number;
   private readonly signZone = { left: 0, right: 0, bottom: 0 };
   private readonly view: QuestView = { x: 0, y: 0, width: 1920, height: 1080, wallX: -Infinity };
-  private readonly herBox = box();
-  private readonly itsBox = box();
+  private readonly tip = { x: 0, y: 0 };
 
   constructor(
     private readonly player: Player,
@@ -189,96 +177,82 @@ export class ReadingQuest {
     private readonly events: QuestEvents,
     viewHeight: number,
   ) {
-    this.sign = new SentenceSign(-viewHeight / 2 + QUEST.wordFromTop, QUEST.letterHeight);
-    this.sign.setSentence(this.sentence.rounds);
+    this.sign = new SentenceSign(-viewHeight / 2 + QUEST.sentenceTop, QUEST.letterHeight);
+    this.sign.setSentence(this.sentence.words);
+    this.reader = new ReadAlong(this.sign, {
+      found: () => this.sounds.play('attack', 0.35, 1.4), // a soft twinkle as the letter lights up
+      swiped: () => {
+        this.sounds.play('toss', 0.7, 1.3);
+        this.sidekick.react('twinkle', 0.6);
+      },
+    });
     this.startX = player.x;
   }
 
   /** Stars to earn: one per word of the sentence. */
-  get starGoal(): number { return this.sentence.rounds.length; }
-  /** The word she's on. */
-  private get word(): Round { return this.sentence.rounds[this.round]; }
-  /** A grown-up can still pick a different sentence (nothing of it is up yet). */
-  get canChangeSentence(): boolean { return this.round === 0 && this.sign.wordsShown === 0 && this.phase !== 'toss'; }
+  get starGoal(): number { return this.sentence.words.length; }
+  /** A grown-up can still pick a different sentence (it isn't up yet). */
+  get canChangeSentence(): boolean { return !this.sign.tossed; }
   /** Seconds since the current phase began (for timing things to it, like the voice-overs). */
   get inPhase(): number { return this.phaseTime; }
 
-  /** Picks the sentence to build; only before its first word is up (see canChangeSentence). */
+  /** Picks the sentence to read; only before it goes up (see canChangeSentence). */
   chooseSentence(sentence: Sentence): boolean {
     if (!this.canChangeSentence) return false;
     this.sentence = sentence;
-    this.sign.setSentence(sentence.rounds);
+    this.sign.setSentence(sentence.words);
     return true;
   }
 
-  /**
-   * She swung her wand (J, facing that way): the letter right in front of her flips upside down and
-   * tumbles off the bottom of the screen. The right one too: then she has to go on and find it again.
-   * Out among the things the wings hide in, it just gives one a bop.
-   */
+  /** She swung her wand (J, facing that way): out among the things the wings hide in, it gives one a bop. */
   attacked(facing: number): void {
-    const p = this.player;
-    if (this.phase === 'lead' || this.phase === 'seek') {
-      const t = this.field.inFront(p.x, p.y - 160, facing);
-      if (t) { t.bonk(); this.effects.stomp(t.x, t.centerY); this.sounds.play('stomp', 0.6, 1.3); }
-      return;
-    }
-    const w = this.phase === 'hunt' ? this.parade.inFront(p.x, p.y - 160, facing) : null;
-    if (!w) return;
-    w.knockOff(p.x);
-    this.effects.stomp(w.centerX, w.centerY);
-    this.sounds.play('stomp');
-    if (w.isKey) {
-      this.parade.keyLost();
-      this.sidekick.react('curious', 0.9);
-    } else this.sidekick.react('cheer', 0.8);
+    if (this.phase !== 'lead' && this.phase !== 'seek') return;
+    const p = this.player, t = this.field.inFront(p.x, p.y - 160, facing);
+    if (!t) return;
+    t.bonk();
+    this.effects.stomp(t.x, t.centerY);
+    this.sounds.play('stomp', 0.6, 1.3);
   }
 
-  /**
-   * She reached out to catch something (L, facing that way). The letter she needs (or the thing the
-   * wings hide in) is caught; a wrong one crackles back and knocks her over.
-   */
+  /** She reached out to catch something (L, facing that way): the thing the wings hide in bursts open; a wrong one crackles back and knocks her over. */
   captured(facing: number): void {
-    const p = this.player, y = p.y - 160;
-    if (this.phase === 'lead' || this.phase === 'seek') {
-      const t = this.field.inFront(p.x, y, facing);
-      if (!t) return;
-      if (t.isTarget) { this.openThing(t); return; }
-      t.nope();
-      this.sidekick.react('curious', 0.9);
-      this.zapBack(t.x, t.centerY, t.halfWidth, facing);
-    } else if (this.phase === 'hunt') {
-      const w = this.parade.inFront(p.x, y, facing);
-      if (!w) return;
-      if (w.isKey) { this.catchLetter(w); return; }
-      w.bump(p.x);
-      this.zapBack(w.centerX, w.centerY, w.halfWidth, facing);
-    }
+    if (this.phase !== 'lead' && this.phase !== 'seek') return;
+    const p = this.player, t = this.field.inFront(p.x, p.y - 160, facing);
+    if (!t) return;
+    if (t.isTarget) { this.openThing(t); return; }
+    t.nope();
+    this.sidekick.react('curious', 0.9);
+    this.effects.zap(t.x - facing * t.halfWidth, t.centerY, -facing);
+    this.player.hurtBy(t.x);
   }
 
   /**
-   * Call first each step, before she moves: listens for the grown-up's word. In a round it counts
-   * twice: once she's said the caught letter's sound (from the moment she catches it), and once she's
-   * read the word (from the moment the first was typed), so a grown-up quick off the mark, typing
-   * before the letter has got where it's going, still counts. At the end it counts once more, for the
-   * whole sentence. The word is typed on the keyboard, and its K would otherwise also cast a spell.
+   * Call first each step, before she moves: listens for the grown-up's word (typed on the keyboard; its
+   * K would otherwise also cast a spell). While she reads, it counts for the sound she's on or the word
+   * (see ReadAlong.confirm); typed when there's nothing to count, it's thrown away. At the end it counts
+   * once more, for the whole sentence (even typed while the elf is still talking).
    */
   listen(input: Input<Action>, now: number): void {
-    const p = this.phase, sentence = p === 'allWords' || p === 'readAll';
-    if (!(sentence || (LISTENING.has(p) && !this.wordOk)) || !input.typed(QUEST.grownUpWord, this.confirmSince)) return;
+    const p = this.phase;
+    if (!LISTENING.has(p) || !input.typed(QUEST.grownUpWord, this.confirmSince)) return;
     input.take('cast', now, 1000);
     input.forgetTyped(); // used up: the next check needs it typed afresh
-    this.confirmSince = now;
-    if (!sentence && !this.soundOk) { this.soundOk = true; return; }
-    this.wordOk = true;
+    if (p === 'read') {
+      const what = this.reader.confirm(now);
+      if (what === 'sound') this.soundSaid();
+      else if (what === 'word') this.wordRead();
+      return;
+    }
+    this.sentenceOk = true;
     if (p === 'readAll') this.startParty();
-    else if (p === 'confirm') this.cheer();
   }
 
-  /** `view` is where the camera is this step (and the left wall), for placing things on and off screen. */
-  update(dt: number, now: number, view: Readonly<QuestView>): void {
+  /**
+   * `view` is where the camera is this step (and the left wall), for placing things on and off screen;
+   * `aim` is where she's pointing on the screen, or null.
+   */
+  update(dt: number, now: number, view: Readonly<QuestView>, aim: Readonly<Aim> | null): void {
     const p = this.player, elf = this.elf, v = Object.assign(this.view, view);
-    this.now = now;
     this.phaseTime += dt;
     const elfDistance = Math.abs(p.x - elf.x), nearElf = elfDistance < QUEST.talkRange && p.y > -260;
     if (!ELF_MOVES.has(this.phase)) elf.lookAt(p.x);
@@ -287,8 +261,9 @@ export class ReadingQuest {
     // the star never floats up in front of the sentence (it's on the screen, so this follows the camera)
     const z = this.signZone;
     z.left = v.x + this.sign.left - 100; z.right = v.x + this.sign.right + 100;
-    z.bottom = v.y + this.sign.y + QUEST.letterHeight / 2;
+    z.bottom = v.y + this.sign.bottom;
     this.sidekick.avoid = this.sign.visible ? z : null;
+    p.still = READING.has(this.phase);
 
     switch (this.phase) {
       case 'intro':
@@ -306,7 +281,7 @@ export class ReadingQuest {
       case 'greet':
         if (!nearElf) break;
         if (this.greeted) { this.toss(); break; }
-        // she's reached the elf for the first time: he says hello before giving her the first word
+        // she's reached the elf for the first time: he says hello before putting the sentence up
         this.greeted = true;
         elf.talk(true); // his hello voice-over starts now (see VoiceCues)
         elf.wave(QUEST.helloFor + QUEST.waveAfterHello);
@@ -315,87 +290,37 @@ export class ReadingQuest {
       case 'hello':
         if (this.phaseTime < QUEST.helloFor) break;
         elf.talk(false);
-        this.tossOrWait(elfDistance); // if she wandered off meanwhile, the word waits until she comes back to him
+        // if she wandered off meanwhile, the sentence waits until she comes back to him
+        if (elfDistance < QUEST.greetLeave) this.toss();
+        else this.enter('greet');
         break;
       case 'toss':
-        if (this.sign.settled) this.enter('memorise');
+        if (this.sign.settled) this.beginWord(0, now);
         break;
-      case 'memorise':
-        if (this.phaseTime >= QUEST.memorise) {
-          this.sign.release();
-          this.enter('vanish');
-        }
-        break;
-      case 'vanish':
-        if (this.sign.key === 'gone') {
-          this.parade.start(this.word, v.x + v.width / 2);
-          this.enter('hunt');
-        }
-        break;
-      case 'hunt':
-        this.parade.march(v.x + v.width / 2, v.wallX);
-        this.collideWalkers();
-        break;
-      case 'caught':
-        if (this.caught && this.caught.happyFor >= QUEST.cheerFor) {
-          this.enter('hover');
-          this.hover(this.caught);
-        }
-        break;
-      case 'hover': {
-        const w = this.caught!;
-        this.hover(w);
-        // it waits by the sidekick until the grown-up has heard her say its sound (see listen)
-        if (!this.soundOk || this.phaseTime < QUEST.hoverAtLeast) break;
-        this.caught = null;
-        w.orbs.highlight = 0;
-        this.sign.receive(w.orbs, -v.x, -v.y, () => {
-          // in it goes, quietly: the celebration waits for the grown-up's second word (see listen)
-          this.sounds.play('collect', 0.6, 1.3); // a soft, higher twinkle as it settles
-          this.enter('confirm');
-          if (this.wordOk) this.cheer();
-        });
-        this.parade.retire(w);
-        this.sounds.play('toss', 0.7, 1.2); // off it goes, up to the word
-        this.enter('flying');
-        break;
-      }
-      case 'elfRun':
-        // he runs in to the middle of the screen, however far off he was
-        if (elf.walkTo(v.x, dt, QUEST.elfRunSpeed)) {
-          elf.lookAt(p.x);
-          elf.wave(QUEST.praiseAfter + QUEST.praiseFor + QUEST.nextWordAfter); // until he tosses the next word
-          this.giveStar();
-        }
-        break;
-      case 'give':
+      case 'wordCheer':
         if (this.phaseTime >= QUEST.starRise && this.starOrbs.waiting) {
           this.starOrbs.roundUp();
           this.sidekick.react('cheer', 1.2);
           this.events.starsChanged(this.starOrbs.count);
         }
-        if (this.phaseTime < QUEST.praiseAfter) break;
-        elf.talk(true);
-        if (this.round < this.sentence.rounds.length - 1) { this.enter('praise'); break; } // "Nice! You found it!" (see VoiceCues)
+        if (this.phaseTime < QUEST.wordCheerFor) break;
+        if (this.reader.word < this.sign.wordCount - 1) { this.beginWord(this.reader.word + 1, now); break; }
         // that was the last word: "You found all the words!" (see VoiceCues), then she reads the lot
-        this.confirmSince = now;
-        this.wordOk = false;
+        elf.talk(true);
         elf.wave(QUEST.allWordsFor + 2);
+        this.confirmSince = now;
+        this.sentenceOk = false;
         this.enter('allWords');
-        break;
-      case 'praise':
-        if (this.phaseTime >= QUEST.praiseFor && this.phaseTime - dt < QUEST.praiseFor) elf.talk(false);
-        if (this.phaseTime >= QUEST.praiseFor + QUEST.nextWordAfter) {
-          this.round++;
-          this.tossOrWait(elfDistance); // the next word goes up beside the others
-        }
         break;
       case 'allWords':
         if (this.phaseTime < QUEST.allWordsFor) break;
         elf.talk(false);
-        // now she reads the whole sentence out; the game quietly waits for the grown-up (see listen)
-        if (this.wordOk) this.startParty();
-        else this.enter('readAll');
+        // now she reads the whole sentence out, pointing along as she likes; the game quietly waits for the grown-up (see listen)
+        if (this.sentenceOk) this.startParty();
+        else {
+          this.reader.free();
+          this.enter('readAll');
+        }
         break;
       case 'party':
         // he hops for joy, again and again, then lands for good
@@ -457,26 +382,27 @@ export class ReadingQuest {
         break;
     }
 
-    this.parade.update(dt);
+    this.aimWand(dt, now, POINTING.has(this.phase) ? aim : null);
     if (this.field.started) this.field.update(dt, v.wallX);
-    this.sign.update(dt);
+    this.sign.update(dt, v.width);
     this.starOrbs.update(dt, this.sidekick.px, this.sidekick.py);
   }
 
-  /** The walking letters and the things the wings hide in: scenery-level, behind the elf, the sidekick and her. */
-  drawWorld(r: SpriteRenderer, alpha: number): void {
+  /** The things the wings hide among: scenery-level, behind the elf, the sidekick and her. */
+  drawWorld(r: SpriteRenderer): void {
     this.field.draw(r);
-    this.parade.draw(r, alpha);
   }
 
-  /** The sentence, pinned to the screen; call with the view set to screen space (centred on 0, 0). */
+  /** The sentence and the magic from her wand, pinned to the screen; call with the view set to screen space (centred on 0, 0). */
   drawScreen(r: SpriteRenderer, alpha: number): void {
+    this.sign.drawBackdrop(r);
+    this.stream.draw(r);
     this.sign.draw(r, alpha);
   }
 
-  // --- the round -------------------------------------------------------------------
+  // --- reading ---------------------------------------------------------------------
 
-  /** He tosses the next word up out of his hand; it floats up to its place in the sentence at the top of the screen. */
+  /** He tosses the sentence up out of his hand; it floats up to the top of the screen. */
   private toss(): void {
     const elf = this.elf, v = this.view, x = elf.x + elf.facing * 128, y = elf.y - 216; // his throwing hand
     elf.play('throw');
@@ -486,57 +412,48 @@ export class ReadingQuest {
     this.enter('toss');
   }
 
-  /** Tosses the next word if she's still by him; otherwise it waits until she comes back. */
-  private tossOrWait(elfDistance: number): void {
-    if (elfDistance < QUEST.greetLeave) this.toss();
-    else this.enter('greet');
+  private beginWord(word: number, now: number): void {
+    this.reader.begin(word);
+    this.chime = 0;
+    this.confirmSince = now;
+    this.enter('read');
   }
 
-  /** A wrong one she reached for crackles back at her and knocks her over. */
-  private zapBack(x: number, y: number, halfWidth: number, facing: number): void {
-    this.effects.zap(x - facing * halfWidth, y, -facing);
-    this.player.hurtBy(x);
+  /**
+   * While she reads, her wand follows her finger (or the mouse): up it goes, she turns towards where
+   * it points, and its magic flows to the letter that's lit (see ReadAlong). `aim` is null whenever
+   * pointing doesn't count.
+   */
+  private aimWand(dt: number, now: number, aim: Readonly<Aim> | null): void {
+    this.reader.update(now, aim);
+    const p = this.player, v = this.view, sign = this.sign, target = this.reader.target;
+    const raised = aim !== null && (aim.pressed || aim.y < sign.y + QUEST.wandReach * sign.letterHeight);
+    p.pointAt = raised ? v.x + (target ? target.x : aim.x) : null;
+    const tip = p.wandTip('cast', this.tip);
+    this.stream.update(dt, tip.x - v.x, tip.y - v.y, raised ? target : null);
   }
 
-  /** The right letter, caught: it jumps for joy; the others scatter into sparkles so she can read in peace. */
-  private catchLetter(w: LetterWalker): void {
-    w.cheer();
-    this.caught = w;
-    this.confirmSince = this.now;
-    this.soundOk = this.wordOk = false;
-    this.effects.collect(w.centerX, w.centerY);
-    this.sounds.play('collect');
-    this.sidekick.react('cheer', 1.2);
-    this.parade.clear(w, (o) => this.effects.poof(o.centerX, o.centerY));
-    this.enter('caught');
+  /** The grown-up heard her say the sound: a chime (higher for each letter along the word), and the sidekick's pleased. */
+  private soundSaid(): void {
+    this.sounds.play('collect', 0.7, 1 + QUEST.chimeStep * this.chime++);
+    this.sidekick.react('happy', 0.6);
   }
 
-  /** Holds the caught letter up in the air beside the sidekick, on the side away from her. */
-  private hover(w: LetterWalker): void {
-    const s = this.sidekick, side = s.px >= this.player.x ? 1 : -1;
-    w.hoverAt(s.px + side * QUEST.hoverSide, s.py + QUEST.hoverBelow);
-  }
-
-  /** The grown-up says she read it: the word hops along and the elf comes running with her star. */
-  private cheer(): void {
-    this.sign.celebrate();
-    const elf = this.elf, v = this.view;
-    // from wherever he was: if that's well off screen, he comes running in from just past the left edge
-    if (Math.abs(elf.x - v.x) > v.width / 2 + 150) elf.x = v.x - v.width / 2 - 160;
-    this.enter('elfRun');
-  }
-
-  /** A star pops out of his waving hand (up by his head, on his back side); it floats up to the sidekick's swirl. */
-  private giveStar(): void {
-    const elf = this.elf, x = elf.x - elf.facing * 80, y = elf.y - 236;
-    this.starOrbs.pop(x, y, x, y - 140);
-    this.effects.starGift(x, y - 40);
+  /** The grown-up heard her read the word: it hops along, a star pops out of it for the sidekick's swirl, and the elf waves. */
+  private wordRead(): void {
+    const sign = this.sign, v = this.view, x = v.x + sign.wordMiddle(this.reader.word), y = v.y + sign.bottom + QUEST.starDrop;
+    sign.celebrate(this.reader.word);
+    this.starOrbs.pop(x, y - 100, x, y);
+    this.effects.starGift(x, y);
     this.sounds.play('star');
-    this.enter('give');
+    this.sidekick.react('cheer', 1.2);
+    this.elf.wave(QUEST.wordCheerFor);
+    this.enter('wordCheer');
   }
 
   /** She read the whole sentence: the sentence hops word by word, the screen fills with lights, and he hops for joy. */
   private startParty(): void {
+    this.reader.stop();
     this.sign.celebrateAll();
     this.events.party();
     this.sidekick.react('spin', 1.5, { frame: 'cheer', time: 2.5 });
@@ -544,32 +461,6 @@ export class ReadingQuest {
     this.hopIn = 0.3;
     this.elf.wave(QUEST.partyFor);
     this.enter('party');
-  }
-
-  /**
-   * Bumps and bounces. Landing on a letter's head bounces her up off it like a trampoline (every letter
-   * alike, so it never gives the answer away), which carries her on over it; walking into a wrong one
-   * knocks her back; the right one never hurts her.
-   */
-  private collideWalkers(): void {
-    const p = this.player;
-    // a forgiving box: her feet have to be well down into the letter, and her body well over it
-    placeBox(this.herBox, p.x, 35, p.y - 250, p.y - 30);
-    for (const w of this.parade.walkers) {
-      if (!w.active) continue;
-      const top = w.top;
-      if (p.vy > 0 && p.prevY <= top + 14 && p.y >= top - 6 && Math.abs(p.x - w.x) < w.halfWidth + 45) {
-        w.boing();
-        p.bounce();
-        this.effects.stomp(w.centerX, top);
-        this.sounds.play('stomp');
-        continue;
-      }
-      // only walking into it knocks her: once she's in it (say she was still flickering safe), she can walk on through
-      const touching = overlaps(this.herBox, placeBox(this.itsBox, w.x, w.halfWidth * 0.7, top, w.bottom)), fresh = touching && !w.touching;
-      w.touching = touching;
-      if (fresh && !w.isKey && p.hurtBy(w.x)) w.bump(p.x);
-    }
   }
 
   // --- the wings -------------------------------------------------------------------

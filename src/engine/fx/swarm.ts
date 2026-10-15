@@ -93,31 +93,6 @@ export class Swarm {
     }
   }
 
-  /** Throws every particle outward from the anchor (and a little up). */
-  burst(speed: number, rng: Rng): void {
-    for (let i = 0; i < this.count; i++) {
-      const a = Math.atan2(this.y[i] - this.anchorY, this.x[i] - this.anchorX) + rng.range(-0.6, 0.6), v = speed * rng.range(0.45, 1);
-      this.vx[i] += Math.cos(a) * v;
-      this.vy[i] += Math.sin(a) * v - speed * 0.25;
-    }
-  }
-
-  /** Shifts every particle and the anchor by (dx, dy) without it counting as motion (moving the flock into another space). */
-  translate(dx: number, dy: number): void {
-    for (let i = 0; i < this.count; i++) {
-      this.x[i] += dx; this.px[i] += dx;
-      this.y[i] += dy; this.py[i] += dy;
-    }
-    this.anchorX += dx; this.lastAX += dx;
-    this.anchorY += dy; this.lastAY += dy;
-  }
-
-  /** Copies the particles (not the controls) from a swarm holding the same formation. */
-  copyParticles(from: Swarm): void {
-    const n = (this.count = Math.min(from.count, this.capacity));
-    for (const k of ['x', 'y', 'vx', 'vy', 'px', 'py', 'homeX', 'homeY'] as const) this[k].set(from[k].subarray(0, n));
-  }
-
   update(dt: number): void {
     this.time += dt;
     const t = this.time;

@@ -8,8 +8,7 @@ const HELLO: readonly VoiceId[] = ['elf-hello-crystal', 'elf-wings-stuck', 'elf-
 
 /** The line he says as each phase begins. */
 const ON_ENTER: Partial<Record<Phase, VoiceId>> = {
-  praise: 'elf-found-it', // he's brought her star: well done, and here's the next word (every word but the last)
-  allWords: 'elf-all-words', // ...and after the last: she's found them all, now read them
+  allWords: 'elf-all-words', // she's read every word: now read them all together
   letsGo: 'elf-lets-go', // after the party, off they go
   wingsTalk: 'elf-found-wings', // back on the grass with her wings
 };
@@ -42,7 +41,7 @@ export class VoiceCues {
   update(): void {
     const quest = this.quest, entered = quest.phase !== this.lastPhase;
     this.lastPhase = quest.phase;
-    // the first time she reaches the elf, he says hello before tossing her first word: once per session
+    // the first time she reaches the elf, he says hello before tossing the sentence up: once per session
     if (quest.phase === 'hello') {
       for (let i = 0; i < HELLO.length; i++) if (quest.inPhase >= QUEST.helloLines[i]) void this.voice.playOnce(HELLO[i]);
     }

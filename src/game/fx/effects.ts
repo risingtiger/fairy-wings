@@ -157,7 +157,7 @@ export class Effects {
     this.orbs.push({ x: x + facing * 30, y, vx: facing * 720, age: 0, life: 1, seed: this.rng.range(0, 10) });
   }
 
-  /** She reaches out to catch a letter: a golden ring opening in front of her wand, and a sprinkle of sparkles. */
+  /** She reaches out to catch something: a golden ring opening in front of her wand, and a sprinkle of sparkles. */
   capture(x: number, y: number, facing: number): void {
     const p = this.particles, cx = x + facing * 80;
     p.ring(cx, y, 30, 260, 0.45, rgba(255, 196, 80, 0.85), 0.12);

@@ -21,8 +21,8 @@ export const PLAYER = {
   apexGravity: 0.55, // multiplier near the top of a held jump: a little hang time
   apexSpeed: 150,
   maxFall: 1900,
-  jumpSpeed: 1500, // ~340 units high held, ~210 tapped: either clears a walking letter (WALKER in letter-walker.ts)
-  jumpCut: 0.6, // releasing jump early keeps this much upward speed (generous, so a small child's quick tap still clears a letter)
+  jumpSpeed: 1500, // ~340 units high held, ~210 tapped
+  jumpCut: 0.6, // releasing jump early keeps this much upward speed (generous, so a small child's quick tap still counts)
   coyoteTime: 0.1,
   jumpBufferMs: 130,
   actionBufferMs: 150,
@@ -33,8 +33,6 @@ export const PLAYER = {
   hurtHop: 560,
   /** After a knock she can't be hurt again for this long (she flickers meanwhile). */
   invulnerableTime: 1.6,
-  /** Upward speed when she bounces off something she jumped on (held jump keeps more of it). */
-  stompBounce: 980,
   // flight (needs wings)
   flySpeed: 470,
   flyFastSpeed: 820,
@@ -73,7 +71,7 @@ export interface FlightAbility {
   duration: number;
 }
 
-export type PlayerState = 'idle' | 'walk' | 'run' | 'crouch' | 'jump' | 'fall' | 'fly' | 'land' | 'hurt' | Move;
+export type PlayerState = 'idle' | 'walk' | 'run' | 'crouch' | 'jump' | 'fall' | 'fly' | 'land' | 'hurt' | 'point' | Move;
 
 /** Hooks for effects and sound; positions are world space. */
 export interface PlayerEvents {
@@ -100,7 +98,7 @@ export interface Pose {
   flash: number;
 }
 
-/** The fairy: walks, runs, jumps, flies (with wings on), waves her wand and gets knocked about. */
+/** The fairy: walks, runs, jumps, flies (with wings on), waves her wand, points it and gets knocked about. */
 export class Player {
   x = 0; y = 0; vx = 0; vy = 0;
   prevX = 0; prevY = 0;
@@ -120,6 +118,10 @@ export class Player {
   flyEffort = 0;
   /** Seconds left in which nothing can hurt her (after a knock). */
   invulnerable = 0;
+  /** While true she stays where she is, and the controls do nothing (she's reading). */
+  still = false;
+  /** While set (a world x) and she's standing, she holds her wand up, turned towards it (pointing at the words). */
+  pointAt: number | null = null;
 
   private coyote = 0;
   /** Where a cutscene is floating her (world y of her feet), or null while she's free. */
@@ -139,6 +141,7 @@ export class Player {
   private readonly rng = new Rng(7);
   private readonly clips: Record<string, Clip>;
   private readonly pose: Pose = { x: 0, y: 0, sx: 1, sy: 1, skew: 0, frame: 0, flash: 0 };
+  private readonly tip = { x: 0, y: 0 };
 
   constructor(private readonly sheet: SpriteSheet, private readonly terrain: Terrain, private readonly events: PlayerEvents) {
     this.clips = Object.fromEntries(sheet.clips);
@@ -177,13 +180,6 @@ export class Player {
     return true;
   }
 
-  /** She landed on top of something: a springy bounce up off it (higher if she keeps jump held). */
-  bounce(speed: number = PLAYER.stompBounce): void {
-    this.leaveGround(-speed);
-    this.enter('jump');
-    this.squash.kick(-1.8);
-  }
-
   update(dt: number, input: Input<Action>, now: number): void {
     const P = PLAYER;
     this.prevX = this.x;
@@ -200,13 +196,14 @@ export class Player {
     this.lastFlight = ability;
     if (this.liftTo !== null) { this.updateLift(dt, this.liftTo); return; }
 
-    const axis = (input.down('right') ? 1 : 0) - (input.down('left') ? 1 : 0);
-    const running = input.down('run'), crouching = input.down('down'), jumpHeld = input.down('jump');
-    this.idleTime = axis !== 0 || crouching || jumpHeld || running ? 0 : this.idleTime + dt;
+    const free = !this.still, held = (action: Action) => free && input.down(action);
+    const axis = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
+    const running = held('run'), crouching = held('down'), jumpHeld = held('jump');
+    this.idleTime = axis !== 0 || crouching || jumpHeld || running || this.state === 'point' ? 0 : this.idleTime + dt;
 
     // one-shot moves
-    const busy = this.state === 'hurt' || this.state in MOVES;
-    if (input.take('hurt', now, P.actionBufferMs) && this.state !== 'hurt') this.getHurt(-this.facing);
+    const busy = !free || this.state === 'hurt' || this.state in MOVES;
+    if (free && input.take('hurt', now, P.actionBufferMs) && this.state !== 'hurt') this.getHurt(-this.facing);
     else if (!busy) {
       for (const move of ['attack', 'capture', 'cast'] as const) {
         if (input.take(move, now, P.actionBufferMs)) { this.enter(move); this.idleTime = 0; break; }
@@ -227,15 +224,17 @@ export class Player {
     }
     this.vx = approach(this.vx, target, accel * dt);
     if (!rooted && axis !== 0) this.facing = axis > 0 ? 1 : -1;
+    // pointing, she turns to what she points at (with a little slack, so straight up doesn't flip her back and forth)
+    if (this.state === 'point' && this.pointAt !== null && Math.abs(this.pointAt - this.x) > 50) this.facing = this.pointAt > this.x ? 1 : -1;
 
     // jumping: coyote time + buffered press + variable height. A second press in the air takes off.
     this.coyote = this.grounded ? P.coyoteTime : Math.max(0, this.coyote - dt);
-    if (this.coyote > 0 && !rooted && input.take('jump', now, P.jumpBufferMs)) {
+    if (free && this.coyote > 0 && !rooted && input.take('jump', now, P.jumpBufferMs)) {
       this.leaveGround(-P.jumpSpeed);
       this.enter('jump');
       this.squash.kick(-1.6);
       this.events.jumped(this.x, this.y);
-    } else if (!this.grounded && !this.flying && ability && this.flightLeft > 0 && this.state !== 'hurt' && input.take('jump', now, P.jumpBufferMs)) {
+    } else if (free && !this.grounded && !this.flying && ability && this.flightLeft > 0 && this.state !== 'hurt' && input.take('jump', now, P.jumpBufferMs)) {
       this.flying = true;
       this.vy = Math.min(this.vy, 0) - P.takeoffBoost;
       if (!busy) this.enter('fly');
@@ -310,6 +309,14 @@ export class Player {
     return out;
   }
 
+  /** Where the tip of her wand is in one of her poses, world space ('cast' holds it up high, as when she points). */
+  wandTip(frame: string, out: Vec): Vec {
+    const [sx, sy] = this.sheet.socket(this.sheet.frame(frame), 'wand', SOCKET_FALLBACK.wand);
+    out.x = this.x + sx * PLAYER.scale * this.facing;
+    out.y = this.y + sy * PLAYER.scale;
+    return out;
+  }
+
   drawShadow(r: SpriteRenderer): void {
     const lift = clamp(1 - (this.terrain.groundY - this.pose.y) / 520, 0, 1), size = 0.35 + 0.65 * lift;
     if (lift > 0) drawShadow(r, this.pose.x - this.facing * 8, this.terrain.groundY, 190 * size, 34 * size, 0.3 * lift);
@@ -357,8 +364,8 @@ export class Player {
       const m = MOVES[this.state as Move];
       if (!this.moveFired && this.stateTime >= m.at) {
         this.moveFired = true;
-        const [sx, sy] = this.sheet.socket(this.sheet.frame(m.frame), 'wand', SOCKET_FALLBACK.wand);
-        this.events[m.event](this.x + sx * P.scale * this.facing, this.y + sy * P.scale, this.facing);
+        const tip = this.wandTip(m.frame, this.tip);
+        this.events[m.event](tip.x, tip.y, this.facing);
       }
       if (this.stateTime >= m.time) this.settle(crouching);
       return;
@@ -389,10 +396,12 @@ export class Player {
   private settle(crouching: boolean): void {
     let next: PlayerState;
     if (!this.grounded) next = this.flying ? 'fly' : this.vy < 0 ? 'jump' : 'fall';
+    else if (this.pointAt !== null) next = 'point';
     else if (crouching) next = 'crouch';
     else if (Math.abs(this.vx) > PLAYER.walkSpeed + 40) next = 'run';
     else if (Math.abs(this.vx) > 12) next = 'walk';
     else next = 'idle';
+    if (next === 'point' && this.state !== 'point') this.squash.kick(-0.9); // a little stretch up as the wand goes up
     if (next !== this.state) this.enter(next);
   }
 
@@ -435,7 +444,8 @@ export class Player {
       case 'jump': this.anim.play(this.stateTime < P.jumpStartTime ? c.jumpStart : c.jumpUp); break;
       case 'fly': this.anim.play(this.vy > 380 ? c.fall : c.jumpUp); break;
       case 'land': this.anim.play(c.jumpStart); break;
-      case 'capture': this.anim.play(c.cast); break;
+      case 'capture':
+      case 'point': this.anim.play(c.cast); break; // the wand held up high
       default: this.anim.play(c[this.state]); // crouch, fall, attack, cast, hurt: a clip of the same name
     }
     this.anim.update(dt, rate);

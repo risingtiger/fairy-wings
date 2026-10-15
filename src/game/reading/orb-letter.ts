@@ -2,7 +2,7 @@ import { Rng } from '../../engine/core/math';
 import { Swarm } from '../../engine/fx/swarm';
 import { mixColor, rgba, withAlpha } from '../../engine/render/color';
 import { Blend, Shape, type SpriteRenderer } from '../../engine/render/sprite-renderer';
-import { glyphPoints, glyphWidth } from '../../engine/text/stroke-font';
+import { glyphPoints } from '../../engine/text/stroke-font';
 
 /** Most orbs any one letter uses (W and B are the busiest, at about 110). */
 const MAX_ORBS = 150;
@@ -20,7 +20,6 @@ const ORB = {
 /** The bold colour a letter turns while it's pointed out (hot gold), and its white-hot cores. */
 const HIGHLIGHT = rgba(255, 206, 30);
 const HIGHLIGHT_CORE = rgba(255, 252, 214);
-const BACKING = rgba(54, 18, 100);
 
 /** Pastel magic lights; each orb picks one. */
 const LIGHTS: readonly [number, number, number][] = [
@@ -61,23 +60,14 @@ export class OrbLetter {
   opacity = 1;
   /** Extra brightness (decays by itself), for the moment it lands in the word. */
   flash = 0;
-  /** 0..1: every orb turns a bold, bright gold and grows a little ("remember this one!"). */
+  /** 0..1: every orb turns a bold, bright gold and grows a little (the letter she's on). */
   highlight = 0;
-  /** 0..1: a dusky glow behind the lights, so they read against bright sky and dandelions (the word has its cloud instead). */
-  backing = 0;
   private readonly light = new Uint32Array(MAX_ORBS);
   private readonly core = new Uint32Array(MAX_ORBS);
   private readonly size = new Float32Array(MAX_ORBS);
-  /** The letter's favourite light (packed), which most of its orbs share. */
-  private favourite = 0;
   private time = 0;
 
   constructor(private readonly rng: Rng) {}
-
-  /** Width of the letter in world units at the current size. */
-  get width(): number { return glyphWidth(this.letter) * this.swarm.scale; }
-  /** The colour most of its orbs share (packed, opaque), for things that go with the letter. */
-  get accent(): number { return this.favourite; }
 
   /** Lays out the orbs for `letter` and gives each a colour (they keep their current positions). */
   set(letter: string): void {
@@ -85,7 +75,6 @@ export class OrbLetter {
     const l = layout(letter), sw = this.swarm, r = this.rng;
     sw.setFormation(l.x, l.y, l.count);
     const favourite = Math.floor(r.next() * LIGHTS.length);
-    this.favourite = rgba(...LIGHTS[favourite]);
     for (let i = 0; i < sw.count; i++) {
       // mostly one colour family per letter, with every other light mixed in
       const [cr, cg, cb] = LIGHTS[r.next() < 0.4 ? (favourite + (r.next() < 0.5 ? 0 : 1)) % LIGHTS.length : Math.floor(r.next() * LIGHTS.length)];
@@ -94,14 +83,6 @@ export class OrbLetter {
       this.size[i] = r.range(0.75, 1.25);
     }
     this.flash = 0;
-  }
-
-  /** Takes over another letter's orbs where they are (it must hold the same letter). */
-  copyFrom(other: OrbLetter): void {
-    this.letter = other.letter;
-    this.swarm.copyParticles(other.swarm);
-    this.light.set(other.light); this.core.set(other.core); this.size.set(other.size);
-    this.favourite = other.favourite;
   }
 
   update(dt: number): void {
@@ -114,13 +95,6 @@ export class OrbLetter {
     const sw = this.swarm, n = sw.count, H = sw.scale, t = this.time;
     if (!n || this.opacity <= 0.004) return;
     const glow = this.opacity, hl = this.highlight, grow = 1 + 0.22 * hl;
-    if (this.backing > 0.004) {
-      const backing = withAlpha(BACKING, 0.26 * this.backing * glow);
-      for (let i = 0; i < n; i++) {
-        const size = H * 0.7 * this.size[i];
-        r.shape(Shape.Glow, sw.px[i] + (sw.x[i] - sw.px[i]) * alpha, sw.py[i] + (sw.y[i] - sw.py[i]) * alpha, size, size, backing, Blend.Alpha, 0.4);
-      }
-    }
     // coloured halos (normal blend, so they read on bright sky too), then hot cores over them
     for (const halo of [true, false]) {
       for (let i = 0; i < n; i++) {

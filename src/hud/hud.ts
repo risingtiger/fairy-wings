@@ -20,7 +20,7 @@ export interface HudState {
   wingsWorn: boolean;
   /** Flight time left for limited wings, 0..1; -1 hides the meter. */
   flight: number;
-  /** Stars earned in the reading quest, out of `starGoal` (the number that earns her wings). */
+  /** Stars earned in the reading quest (one per word read), out of `starGoal`. */
   stars: number;
   starGoal: number;
   /** All sound is off (effects and music). */
@@ -32,7 +32,7 @@ export interface HudState {
   /** The sentences to pick from, and the one picked. */
   sentences: readonly SentenceOption[];
   sentenceId: string;
-  /** The first word is up: the sentence can't be changed any more (until the page is reloaded). */
+  /** The sentence is up: it can't be changed any more (until the page is reloaded). */
   sentenceLocked: boolean;
 }
 
@@ -125,16 +125,17 @@ export class Hud {
     return html`<section class="panel help">
       ${this.heading(html`Earn your wings <small>reading game</small>`, 'Hide controls', this.toggleHelp)}
       <ul>
+        ${row(['Finger'], 'point your wand at a letter (or with the mouse) · swipe across a word')}
         ${row(['←', '→'], 'walk')}
         ${row(['Shift'], 'hold to run')}
-        ${row(['Space'], 'jump over letters (or bounce off their heads) · hold for higher')}
-        ${row(['J'], 'wave your wand · knocks a letter away')}
-        ${row(['L'], 'catch the missing letter (and the thing the wings hide in)')}
+        ${row(['Space'], 'jump · hold for higher')}
+        ${row(['J'], 'wave your wand')}
+        ${row(['L'], 'catch the thing the wings hide in')}
         ${row(['E'], 'put wings on or away (once earned)')}
         ${row(['M'], 'all sound on or off')}
         ${row(['N'], 'music on or off')}
       </ul>
-      <p class="muted">Walk up to the elf to get a word. Remember the golden letter before it floats away, then head right: letters come walking along. Jump over the wrong ones or knock them away with your wand, and catch the missing one with <kbd>L</kbd> (careful: knock it away and you'll have to find it again). Read the word out loud, and the elf brings you a star and the next word. ${s.starGoal} words make a sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf, and catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+      <p class="muted">Walk up to the elf and he puts up a sentence. Point your wand at the first letter: it glows gold. Say its sound, then on to the next letter, and the next. When you've said them all, put your finger on the first letter and swipe across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf, and catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
     </section>`;
   }
 
@@ -150,9 +151,9 @@ export class Hud {
       </label>
       ${picked ? html`<p><b>The wings hide in:</b> ${picked.hint}.</p>` : nothing}
       <p class="muted">${s.sentenceLocked
-        ? 'The first word is up, so the sentence is set for this game. Reload the page to start again with a different one.'
-        : 'Pick it before the elf puts up the first word.'}</p>
-      <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard when she says the caught letter's sound, again when she reads the word, and once more when she reads the whole sentence out.</p>
+        ? 'The sentence is up, so it\'s set for this game. Reload the page to start again with a different one.'
+        : 'Pick it before the elf puts it up.'}</p>
+      <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard each time she says the sound of the letter she's pointing at (it glows gold), again once she has swiped across the word and read it out, and once more when she reads the whole sentence. An <kbd>o</kbd><kbd>k</kbd> doesn't count while she isn't pointing at the letter, or before she has swiped the word.</p>
     </section>`;
   }
 

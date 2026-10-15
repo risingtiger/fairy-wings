@@ -1,6 +1,7 @@
 import type { SoundBank } from '../engine/audio/sound';
 import { clamp } from '../engine/core/math';
 import type { Input } from '../engine/input/input';
+import type { Pointer } from '../engine/input/pointer';
 import { Terrain } from '../engine/physics/terrain';
 import { Camera } from '../engine/render/camera';
 import { rgba } from '../engine/render/color';
@@ -18,6 +19,7 @@ import { Party } from './fx/party';
 import { WingCharm } from './prizes/wing-charm';
 import { WING_STYLES, Wings, type WingId } from './prizes/wings';
 import { QUEST, ReadingQuest, type QuestView } from './quest/quest';
+import type { Aim } from './reading/read-along';
 import { VIEW_HEIGHT, type Level } from './world/level';
 
 /**
@@ -82,7 +84,10 @@ export class Game implements PlayerEvents {
   /** The furthest right she's been; the left wall trails it by a screen width. */
   private furthest = 0;
   private time = 0;
+  /** How far ahead of her the camera looks (the way she faces or moves); held while she stands reading, so turning to point doesn't pan it. */
+  private lead = 0;
   private readonly view: QuestView = { x: 0, y: 0, width: 0, height: VIEW_HEIGHT, wallX: -Infinity };
+  private readonly aim: Aim = { x: 0, y: 0, pressed: false, pressX: 0, pressY: 0, pressAt: -Infinity };
 
   constructor(assets: Assets, readonly level: Level, private readonly ui: GameEvents) {
     this.background = assets.background;
@@ -117,7 +122,8 @@ export class Game implements PlayerEvents {
     return f && f.duration !== Infinity ? this.player.flightLeft / f.duration : -1;
   }
 
-  update(dt: number, now: number, input: Input<Action>): void {
+  /** One step; `pointer` is her finger (or the mouse) on the screen, for pointing her wand at the words. */
+  update(dt: number, now: number, input: Input<Action>, pointer: Pointer): void {
     const p = this.player, cam = this.camera;
     this.quest.listen(input, now); // before she moves (see listen)
     if (!this.ceremony.busy && input.take('wings', now, 150)) this.cycleWings();
@@ -133,7 +139,7 @@ export class Game implements PlayerEvents {
     this.elf.update(dt);
     const v = this.view;
     v.x = cam.x; v.y = cam.y; v.width = cam.width; v.wallX = wallX;
-    this.quest.update(dt, now, v);
+    this.quest.update(dt, now, v, this.aimOf(pointer));
     for (const charm of this.charms) {
       charm.update(dt, p);
       if (charm.flying) this.effects.trail(charm.x, charm.currentY); // a trail of sparkles as they fly off
@@ -143,7 +149,8 @@ export class Game implements PlayerEvents {
 
     // small hops barely move the camera; real height (flight) is followed, keeping her a little above centre
     const targetY = Math.min(this.level.restY + Math.min(0, p.y) * 0.32, p.y + 60, this.ceremony.cameraY ?? Infinity);
-    cam.follow(p.x, Math.max(PLAYER.worldCeiling - 260, targetY), clamp(p.facing * 150 + p.vx * 0.22, -320, 320), dt, 0.16, p.flying ? 0.32 : 0.22);
+    if (!p.still) this.lead = clamp(p.facing * 150 + p.vx * 0.22, -320, 320);
+    cam.follow(p.x, Math.max(PLAYER.worldCeiling - 260, targetY), this.lead, dt, 0.16, p.flying ? 0.32 : 0.22);
     // hard limits so a fast climb or dive never leaves her off screen (head ~320 units above her feet)
     cam.clampY(p.y - VIEW_HEIGHT / 2 + 120, p.y - 320 + VIEW_HEIGHT / 2 - 90);
     this.effects.updateMotes(dt, cam.x, cam.y, cam.width, VIEW_HEIGHT);
@@ -159,7 +166,7 @@ export class Game implements PlayerEvents {
     // during the ceremony the scene sits under its violet light; the wings being given, her and the star stay on top
     const featured = this.ceremony.featured;
     for (const charm of this.charms) if (charm !== featured) charm.draw(r);
-    this.quest.drawWorld(r, alpha);
+    this.quest.drawWorld(r);
     this.elf.draw(r);
     this.ceremony.drawBehind(r, alpha, x, y, w, h);
     featured?.draw(r);
@@ -177,6 +184,17 @@ export class Game implements PlayerEvents {
     // the sentence is pinned to the screen, over everything
     r.setView(0, 0, w, h);
     this.quest.drawScreen(r, alpha);
+  }
+
+  /** Where the pointer is on the screen (screen space, centred on 0, 0), or null if it isn't on it: no finger down, or the mouse elsewhere. */
+  private aimOf(pointer: Pointer): Aim | null {
+    if (!pointer.inside) return null;
+    const a = this.aim, w = this.camera.width, s = pointer.pressStart;
+    a.x = (pointer.u - 0.5) * w; a.y = (pointer.v - 0.5) * VIEW_HEIGHT;
+    a.pressX = (s.u - 0.5) * w; a.pressY = (s.v - 0.5) * VIEW_HEIGHT;
+    a.pressed = pointer.pressed;
+    a.pressAt = s.at;
+    return a;
   }
 
   /** The left wall, as a soft curtain of light with sparkles drifting up it, once she's near enough to see it. */
@@ -232,12 +250,12 @@ export class Game implements PlayerEvents {
     this.effects.attacked(x, y, facing);
     this.sounds.play('attack');
     this.sidekick.react('twinkle', 0.5);
-    this.quest.attacked(facing); // the wand knocks the letter in front of her off the screen
+    this.quest.attacked(facing); // a bop for whatever's in front of her
   }
   captured(x: number, y: number, facing: number): void {
     this.effects.capture(x, y, facing);
     this.sounds.play('toss', 0.5, 1.25); // a soft rising shimmer as her wand reaches out
-    this.quest.captured(facing); // catches the right letter (a wrong one knocks her back)
+    this.quest.captured(facing); // catches the thing the wings hide in (a wrong one knocks her back)
   }
   cast(x: number, y: number, facing: number): void { this.effects.cast(x, y, facing); this.sidekick.react('cheer', 0.8); }
   hurt(x: number, y: number): void {

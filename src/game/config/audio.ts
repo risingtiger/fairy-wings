@@ -18,19 +18,19 @@ export const SOUNDS = {
   step: { volume: 0.25, pitchJitter: 0.08, volumeJitter: 0.25, maxVoices: 3 },
   /** Quicker, firmer running footfalls on the same ground. */
   run: { volume: 0.3, pitchJitter: 0.08, volumeJitter: 0.25, maxVoices: 3 },
-  /** A cute bright wink-sparkle as she swings her wand. */
+  /** A cute bright wink-sparkle as she swings her wand (and, softly, as her pointing wand lights a letter). */
   attack: { volume: 0.4, pitchJitter: 0.06, volumeJitter: 0.1, maxVoices: 3 },
   /** Sparkly rising chime when a new star is hers. */
   star: { volume: 0.6, maxVoices: 1 },
   /** Angelic choir fanfare the moment the purple wings touch her. */
   wings: { volume: 0.8, maxVoices: 1 },
-  /** A tiny cute "uh!" when a letter bumps into her (not a pain sound). */
+  /** A tiny cute "uh!" when something knocks her over (not a pain sound). */
   hurt: { volume: 0.5, pitchJitter: 0.05, maxVoices: 1 },
-  /** A round little pop when she bounces on a letter. */
+  /** A round little pop when her wand bops something. */
   stomp: { volume: 0.55, pitchJitter: 0.08, volumeJitter: 0.1, maxVoices: 2 },
-  /** Soft rising shimmer whoosh as the elf tosses a word into the air. */
+  /** Soft rising shimmer whoosh as the elf tosses the sentence into the air (and, higher, as she swipes across a word). */
   toss: { volume: 0.45, pitchJitter: 0.05, maxVoices: 2 },
-  /** Crystal twinkle when she catches the right letter. */
+  /** Crystal twinkle when she catches the thing the wings hide in, and as each sound she says is heard (rising along the word). */
   collect: { volume: 0.35, pitchJitter: 0.03, maxVoices: 2 },
 } satisfies Record<string, SoundOptions>;
 

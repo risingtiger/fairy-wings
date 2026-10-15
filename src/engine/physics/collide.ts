@@ -11,7 +11,7 @@ export function placeBox(b: Box, x: number, halfWidth: number, top: number, bott
 
 export const overlaps = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
-/** Something that can be reached for: a letter to catch, a thing to knock. */
+/** Something that can be reached for: a thing to catch or knock. */
 export interface Reachable {
   readonly x: number;
   readonly centerY: number;
