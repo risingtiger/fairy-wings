@@ -203,7 +203,8 @@ export class Player {
     if (this.grounded) this.x += this.terrain.carry(this.x, this.y); // riding something that moves
 
     const free = !this.still, held = (action: Action) => free && input.down(action);
-    const axis = (held('right') ? 1 : 0) - (held('left') ? 1 : 0);
+    // a key goes full speed; an on-screen stick pushed part way, slower
+    const axis = free ? input.strength('right') - input.strength('left') : 0;
     const running = held('run'), crouching = held('down'), jumpHeld = held('jump');
     this.idleTime = axis !== 0 || crouching || jumpHeld || running || this.state === 'point' ? 0 : this.idleTime + dt;
 

@@ -6,12 +6,13 @@ import { load, loadFlag, save } from './engine/core/storage';
 import { CanvasSize, GpuUnsupportedError, initGpu } from './engine/gpu/device';
 import { Input } from './engine/input/input';
 import { Pointer } from './engine/input/pointer';
+import { TouchPad } from './engine/input/touch-pad';
 import { Loader } from './engine/render/loader';
 import { chooseTier, QUALITY, SlowFrameWatch } from './engine/render/quality';
 import { SpriteRenderer } from './engine/render/sprite-renderer';
 import { loadAssets } from './game/assets';
 import { MUSIC } from './game/config/audio';
-import { ACTIONS, BINDINGS } from './game/config/controls';
+import { ACTIONS, BINDINGS, TOUCH } from './game/config/controls';
 import { Game } from './game/game';
 import { createVoice, VoiceCues } from './game/quest/voice-cues';
 import { SENTENCES, sentenceById } from './game/reading/words';
@@ -24,6 +25,12 @@ const KEYS = { muted: 'sidescroller.muted', musicOff: 'sidescroller.musicOff', s
 async function main(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
   const hud = new Hud(document.querySelector<HTMLElement>('#hud')!);
+  // played by touch (an iPad) gets on-screen controls; `?touch` in the URL tries them with a mouse
+  const touch = matchMedia('(any-pointer: coarse)').matches || new URLSearchParams(location.search).has('touch');
+  document.body.classList.toggle('touch', touch);
+  hud.update({ touch });
+  // no pinching the page bigger (Safari; elsewhere touch-action does it)
+  if (touch) for (const type of ['gesturestart', 'gesturechange']) document.addEventListener(type, (e) => e.preventDefault());
   const mixer = new Mixer();
   const voice = createVoice(mixer); // first, so its lines load while the graphics start up
 
@@ -39,8 +46,14 @@ async function main(): Promise<void> {
   const renderer = await SpriteRenderer.create(gpu);
   const loader = new Loader(device, renderer, tier);
   const level = MEADOW;
+  const input = new Input(window, ACTIONS, BINDINGS);
+  const pad = touch ? new TouchPad(document.querySelector<HTMLElement>('#touch')!, input, TOUCH) : null;
+  pad?.show('wings', false); // until she has some
   const game = new Game(await loadAssets(loader, mixer, level), level, {
-    wingsChanged: (badge) => hud.update({ wingName: badge?.name ?? '', wingsWorn: badge?.worn ?? false }),
+    wingsChanged: (badge) => {
+      hud.update({ wingName: badge?.name ?? '', wingsWorn: badge?.worn ?? false });
+      pad?.show('wings', badge !== null);
+    },
     starsChanged: (count) => hud.update({ stars: count }),
   });
   const { quest, sounds } = game;
@@ -54,6 +67,7 @@ async function main(): Promise<void> {
     hud.update({ sentenceId: quest.sentence.id, starGoal: quest.starGoal });
   };
   hud.update({ starGoal: quest.starGoal, sentences: SENTENCES, sentenceId: quest.sentence.id });
+  hud.onOk = () => quest.grownUpOk();
 
   // M silences effects and music (the voice stays: it's how she follows the game); N switches just the music
   const music = await musicLoading;
@@ -62,11 +76,22 @@ async function main(): Promise<void> {
     if (music) music.muted = sounds.muted || musicOff;
     hud.update({ muted: sounds.muted, musicOff });
   };
+  const toggleSound = () => {
+    sounds.muted = !sounds.muted;
+    save(KEYS.muted, sounds.muted);
+    applySound();
+  };
+  const toggleMusic = () => {
+    musicOff = !musicOff;
+    save(KEYS.musicOff, musicOff);
+    applySound();
+  };
+  hud.onSound = toggleSound;
+  hud.onMusic = toggleMusic;
   sounds.muted = loadFlag(KEYS.muted);
   applySound();
   music?.start(); // the browser holds it until the first key or tap
   voice.onSpeakingChange((speaking) => music?.duck(speaking ? MUSIC.duck : 0, speaking ? MUSIC.duckIn : MUSIC.duckOut)); // music steps back while someone talks
-  const input = new Input(window, ACTIONS, BINDINGS);
   const pointer = new Pointer(canvas); // her finger (or the mouse), pointing her wand at the words
 
   // a guessed high tier that can't keep up drops to low, and starts there from then on
@@ -86,16 +111,9 @@ async function main(): Promise<void> {
       input.poll(now);
       if (input.take('help', now, 250)) hud.update({ showHelp: !hud.value.showHelp });
       if (input.take('debug', now, 250)) hud.update({ showDebug: !hud.value.showDebug });
-      if (input.take('mute', now, 250)) {
-        sounds.muted = !sounds.muted;
-        save(KEYS.muted, sounds.muted);
-        applySound();
-      }
-      if (input.take('music', now, 250)) {
-        musicOff = !musicOff;
-        save(KEYS.musicOff, musicOff);
-        applySound();
-      }
+      if (input.take('mute', now, 250)) toggleSound();
+      if (input.take('music', now, 250)) toggleMusic();
+      if (pad) pad.enabled = !game.player.still; // reading, her fingers are for the letters
     },
     update(dt, now) {
       game.update(dt, now, input, pointer);
@@ -130,7 +148,25 @@ async function main(): Promise<void> {
 
   hud.update({ status: 'ready' });
   loop.start();
-  if (import.meta.env.DEV) Object.assign(window, { game: { game, renderer, loader, canvasSize, loop, input, pointer, voice, music, mixer } }); // console debugging
+  playOffline(music?.urls ?? []);
+  if (import.meta.env.DEV) Object.assign(window, { game: { game, hud, renderer, loader, canvasSize, loop, input, pointer, pad, voice, music, mixer } }); // console debugging
+}
+
+/**
+ * Installed to the home screen or not, the game keeps working with no network (production builds only;
+ * see src/sw.js). Whenever a worker takes over (the first, or a newer version) it's handed everything
+ * the page fetched before then to keep too, and `extra` (the music, which otherwise only streams as it plays).
+ */
+function playOffline(extra: readonly string[]): void {
+  const workers = navigator.serviceWorker;
+  if (!import.meta.env.PROD || !workers) return;
+  workers.register(`${import.meta.env.BASE_URL}sw.js`).catch((error: unknown) => console.warn('No offline play:', error));
+  const handOver = (worker: ServiceWorker | null | undefined) => worker?.postMessage({
+    type: 'cache',
+    urls: [...performance.getEntriesByType('resource').map((entry) => entry.name), ...extra.map((url) => new URL(url, location.href).href)],
+  });
+  void workers.ready.then((registration) => handOver(registration.active));
+  workers.addEventListener('controllerchange', () => handOver(workers.controller));
 }
 
 main().catch((error: unknown) => {

@@ -1,4 +1,6 @@
 import { html, nothing, render } from 'lit-html';
+import { unsafeHTML } from 'lit-html/directives/unsafe-html.js';
+import { TOUCH } from '../game/config/controls';
 
 export interface HudState {
   status: 'loading' | 'ready' | 'error';
@@ -34,6 +36,8 @@ export interface HudState {
   sentenceId: string;
   /** The sentence is up: it can't be changed any more (until the page is reloaded). */
   sentenceLocked: boolean;
+  /** Played by touch (an iPad): on-screen controls, a hidden "ok" for the grown-up, sound switches in their panel. */
+  touch: boolean;
 }
 
 /** A sentence in the grown-ups' list: its words, and what the wings hide in. */
@@ -49,10 +53,15 @@ export class Hud {
     fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0, quality: '',
     wingName: '', wingsWorn: false, flight: -1,
     stars: 0, starGoal: 0, muted: false, musicOff: false,
-    showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false,
+    showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false, touch: false,
   };
   /** A grown-up picked a different sentence. */
   onSentence: ((id: string) => void) | null = null;
+  /** The grown-up tapped the hidden "ok" (touch screens). */
+  onOk: (() => void) | null = null;
+  /** The grown-up switched all sound, or just the music, on or off (touch screens; the keyboard has M and N). */
+  onSound: (() => void) | null = null;
+  onMusic: (() => void) | null = null;
   private scheduled = false;
   private readonly toggleHelp = () => this.update({ showHelp: !this.state.showHelp });
   private readonly toggleGrownUps = () => this.update({ showGrownUps: !this.state.showGrownUps });
@@ -65,6 +74,10 @@ export class Hud {
   private readonly keepKeys = (e: KeyboardEvent) => e.stopPropagation();
   /** Clicks shouldn't focus the buttons: Space (jump) would then press them too. */
   private readonly keepFocus = (e: Event) => e.preventDefault();
+  private readonly ok = (e: Event) => { e.preventDefault(); this.onOk?.(); };
+  private readonly sound = () => this.onSound?.();
+  private readonly music = () => this.onMusic?.();
+  private readonly stats = () => this.update({ showDebug: !this.state.showDebug });
 
   constructor(private readonly root: HTMLElement) { this.flush(); }
 
@@ -102,7 +115,10 @@ export class Hud {
       ${s.showDebug ? this.debug(s) : nothing}
       ${s.wingName ? this.wingBadge(s) : nothing}
       ${this.starRow(s.stars, s.starGoal)}
-      <div class="corner-hint"><kbd>M</kbd> sounds ${s.muted ? 'off' : 'on'} · <kbd>N</kbd> music ${s.muted || s.musicOff ? 'off' : 'on'} · <kbd>\`</kbd> stats</div>
+      ${s.touch
+        ? html`<button class="grown-up-ok" tabindex="-1" aria-label="Grown-up: ok" @pointerdown=${this.ok}></button>
+          <div class="rotate"><div class="card"><span class="device"></span>Turn the screen sideways to play</div></div>`
+        : html`<div class="corner-hint"><kbd>M</kbd> sounds ${s.muted ? 'off' : 'on'} · <kbd>N</kbd> music ${s.muted || s.musicOff ? 'off' : 'on'} · <kbd>\`</kbd> stats</div>`}
     `;
   }
 
@@ -122,20 +138,33 @@ export class Hud {
 
   private help(s: HudState) {
     const row = (keys: string[], what: string) => html`<li><span>${keys.map((k) => html`<kbd>${k}</kbd>`)}</span>${what}</li>`;
+    // on a touch screen, each button's own icon
+    const button = (className: string, what: string) => html`<li><span><span class="pad-icon ${className}">${unsafeHTML(TOUCH.buttons.find((b) => b.className === className)?.icon ?? '')}</span></span>${what}</li>`;
     return html`<section class="panel help">
       ${this.heading(html`Earn your wings <small>reading game</small>`, 'Hide controls', this.toggleHelp)}
       <ul>
         ${row(['Finger'], 'tap a letter with your wand (or click it) · press and slide across a word')}
-        ${row(['←', '→'], 'walk')}
-        ${row(['Shift'], 'hold to run')}
-        ${row(['Space'], 'jump · hold for higher')}
-        ${row(['J'], 'wave your wand')}
-        ${row(['L'], 'catch the thing the wings hide in')}
-        ${row(['E'], 'put wings on or away (once earned)')}
-        ${row(['M'], 'all sound on or off')}
-        ${row(['N'], 'music on or off')}
+        ${s.touch ? html`
+          ${row(['Left thumb'], 'slide it to walk, further to run · down to crouch')}
+          ${button('jump', 'jump · hold for higher · again in the air to fly (once she has wings)')}
+          ${button('catch', 'catch the thing the wings hide in')}
+          ${button('wand', 'wave your wand')}
+          ${button('magic', 'magic')}
+          ${button('wings', 'put wings on or away (once earned)')}
+        ` : html`
+          ${row(['←', '→'], 'walk')}
+          ${row(['Shift'], 'hold to run')}
+          ${row(['Space'], 'jump · hold for higher')}
+          ${row(['J'], 'wave your wand')}
+          ${row(['L'], 'catch the thing the wings hide in')}
+          ${row(['E'], 'put wings on or away (once earned)')}
+          ${row(['M'], 'all sound on or off')}
+          ${row(['N'], 'music on or off')}
+        `}
       </ul>
-      <p class="muted">Walk up to the elf and he puts up a sentence. Tap the first letter: it glows gold. Say its sound, then tap the next letter, and the next. When you've said them all, put your finger down on the first letter and slide it across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf: jump the gaps, and hop onto the floating islands to ride over the wide ones. Then catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.</p>
+      <p class="muted">Walk up to the elf and he puts up a sentence. Tap the first letter: it glows gold. Say its sound, then tap the next letter, and the next. When you've said them all, put your finger down on the first letter and slide it across the word, then read it out loud. Every word gives you a star. ${s.starGoal} words make the sentence: read it, and it tells you where the Purple Wings are hiding. Follow the elf: jump the gaps, and hop onto the floating islands to ride over the wide ones. ${s.touch
+        ? 'Then catch the right one with the hand button!'
+        : html`Then catch the right one with <kbd>L</kbd>!<br />Also: <kbd>↓</kbd> crouch, <kbd>K</kbd> magic, <kbd>H</kbd> tumble. Gamepad: stick, A jump, X wand, Y catch, LB wings, RB run.<br /><kbd>?</kbd> shows and hides this panel.`}</p>
     </section>`;
   }
 
@@ -153,7 +182,17 @@ export class Hud {
       <p class="muted">${s.sentenceLocked
         ? 'The sentence is up, so it\'s set for this game. Reload the page to start again with a different one.'
         : 'Pick it before the elf puts it up.'}</p>
-      <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard each time she says the sound of the letter she's tapped (it glows gold), and again once she has swiped across the word and read it out. A word of one letter, like "a", needs only its sound. An <kbd>o</kbd><kbd>k</kbd> doesn't count before she's tapped the letter, or before she has swiped the word.</p>
+      ${s.touch ? html`
+        <p class="muted">Tap the very top middle of the screen, where the stars are, each time she says the sound of the letter she's tapped (it glows gold), and again once she has swiped across the word and read it out. Nothing shows there: it's your "ok". A word of one letter, like "a", needs only its sound. A tap doesn't count before she's tapped the letter, or before she has swiped the word.</p>
+        <div class="switches">
+          <button tabindex="-1" @click=${this.sound}>Sound ${s.muted ? 'off' : 'on'}</button>
+          <button tabindex="-1" ?disabled=${s.muted} @click=${this.music}>Music ${s.muted || s.musicOff ? 'off' : 'on'}</button>
+          <button tabindex="-1" @click=${this.stats}>Stats ${s.showDebug ? 'on' : 'off'}</button>
+        </div>
+        <p class="muted">Stats show how smoothly it runs (frames per second) at the bottom of the screen.</p>
+      ` : html`
+        <p class="muted">Type <kbd>o</kbd><kbd>k</kbd> on the keyboard each time she says the sound of the letter she's tapped (it glows gold), and again once she has swiped across the word and read it out. A word of one letter, like "a", needs only its sound. An <kbd>o</kbd><kbd>k</kbd> doesn't count before she's tapped the letter, or before she has swiped the word.</p>
+      `}
     </section>`;
   }
 
@@ -167,7 +206,7 @@ export class Hud {
       <span class="icon ${s.wingName.startsWith('Purple') ? 'purple' : ''}"></span>
       <span>${s.wingName} · ${s.wingsWorn ? 'worn' : 'put away'}</span>
       ${meter ? html`<span class="meter ${s.flight < 0.3 ? 'low' : ''}"><span style="transform: scaleX(${s.flight.toFixed(3)})"></span></span>` : nothing}
-      <kbd>E</kbd>
+      ${s.touch ? nothing : html`<kbd>E</kbd>`}
     </div>`;
   }
 

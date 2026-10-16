@@ -1,4 +1,5 @@
-const GESTURES = ['keydown', 'pointerdown', 'touchend'] as const;
+/** Events browsers let start sound: a key, a press, or a finger lifting (on iPad, a finger's pointerup or touchend). */
+const GESTURES = ['keydown', 'pointerdown', 'pointerup', 'touchend'] as const;
 
 /**
  * The one AudioContext all sound plays through (iOS allows only a few, and each has to be unlocked

@@ -10,13 +10,14 @@ import type { Effects } from '../fx/effects';
 
 /**
  * The gaps on the way to the wings, in order (world units across). A full jump at a walk clears about
- * 250, so these leave her a moment to jump in; the `island` ones are too wide even running, and a
- * floating island glides back and forth over each to ride across.
+ * 250, so these leave her a moment to jump in; the `island` ones are too wide even running (about
+ * 550), and a floating island glides back and forth over each to ride across. Waiting at the near
+ * edge of the widest, she still sees its far side on a 4:3 iPad (1440 units across).
  */
 const GAPS: readonly { width: number; island?: true }[] = [
-  { width: 140 }, { width: 160 }, { width: 760, island: true },
-  { width: 150 }, { width: 170 }, { width: 820, island: true },
-  { width: 160 }, { width: 880, island: true },
+  { width: 140 }, { width: 160 }, { width: 700, island: true },
+  { width: 150 }, { width: 170 }, { width: 740, island: true },
+  { width: 160 }, { width: 760, island: true },
 ];
 
 const COURSE = {

@@ -12,14 +12,17 @@ const AXIS_THRESHOLD = 0.35;
 const TYPED_HISTORY = 16;
 
 /**
- * Action-based input over keyboard and gamepads. Presses are timestamped so gameplay can buffer them
- * (e.g. a jump pressed just before landing still counts).
+ * Action-based input over keyboard, gamepads and on-screen controls (see hold). Presses are
+ * timestamped so gameplay can buffer them (e.g. a jump pressed just before landing still counts).
  */
 export class Input<A extends string> {
   private readonly index = new Map<A, number>();
   private readonly keyActions = new Map<string, number[]>();
   private readonly keyHeld: Uint8Array;
   private readonly padHeld: Uint8Array;
+  /** Held by an on-screen control, and how hard (0..1). */
+  private readonly touchHeld: Uint8Array;
+  private readonly touchStrength: Float32Array;
   private readonly pressedAt: Float64Array;
   private readonly consumed: Uint8Array;
   /** The last few letters typed (lower case) and when, oldest first, for typed(). */
@@ -30,6 +33,8 @@ export class Input<A extends string> {
     actions.forEach((a, i) => this.index.set(a, i));
     this.keyHeld = new Uint8Array(actions.length);
     this.padHeld = new Uint8Array(actions.length);
+    this.touchHeld = new Uint8Array(actions.length);
+    this.touchStrength = new Float32Array(actions.length);
     this.pressedAt = new Float64Array(actions.length).fill(-Infinity);
     this.consumed = new Uint8Array(actions.length).fill(1);
     for (const a of actions) for (const code of bindings.keys[a] ?? []) {
@@ -43,12 +48,12 @@ export class Input<A extends string> {
       if (!list || e.metaKey || e.ctrlKey) return;
       e.preventDefault();
       if (e.repeat) return;
-      for (const i of list) { if (!this.keyHeld[i]) this.press(i, e.timeStamp); this.keyHeld[i] = 1; }
+      for (const i of list) { if (!this.keyHeld[i] && !this.touchHeld[i]) this.press(i, e.timeStamp); this.keyHeld[i] = 1; }
     });
     target.addEventListener('keyup', (e) => {
       for (const i of this.keyActions.get(e.code) ?? []) this.keyHeld[i] = 0;
     });
-    target.addEventListener('blur', () => { this.keyHeld.fill(0); this.padHeld.fill(0); });
+    target.addEventListener('blur', () => { this.keyHeld.fill(0); this.padHeld.fill(0); this.touchHeld.fill(0); this.touchStrength.fill(0); });
   }
 
   /** Polls gamepads; call once per frame before simulating. */
@@ -64,14 +69,31 @@ export class Input<A extends string> {
         const ax = (axes as Record<string, { axis: number; dir: number }>)[a];
         if (ax && (pad.axes[ax.axis] ?? 0) * ax.dir > AXIS_THRESHOLD) held = true;
       }
-      if (held && !this.padHeld[i] && !this.keyHeld[i]) this.press(i, now);
+      if (held && !this.padHeld[i] && !this.keyHeld[i] && !this.touchHeld[i]) this.press(i, now);
       this.padHeld[i] = held ? 1 : 0;
     }
   }
 
+  /**
+   * Holds or lets go of an action from an on-screen control: `time` is the event's timestamp, and
+   * `strength` how hard it's held, 0..1 (how far a stick is pushed; see strength()).
+   */
+  hold(action: A, held: boolean, time: number, strength = 1): void {
+    const i = this.index.get(action)!;
+    if (held && !this.touchHeld[i] && !this.keyHeld[i] && !this.padHeld[i]) this.press(i, time);
+    this.touchHeld[i] = held ? 1 : 0;
+    this.touchStrength[i] = held ? strength : 0;
+  }
+
   down(action: A): boolean {
     const i = this.index.get(action)!;
-    return this.keyHeld[i] === 1 || this.padHeld[i] === 1;
+    return this.keyHeld[i] === 1 || this.padHeld[i] === 1 || this.touchHeld[i] === 1;
+  }
+
+  /** How hard an action is held, 0..1: fully by a key or button, maybe only partly by an on-screen stick. */
+  strength(action: A): number {
+    const i = this.index.get(action)!;
+    return this.keyHeld[i] || this.padHeld[i] ? 1 : this.touchStrength[i];
   }
 
   /** True once per press if it happened within the last `bufferMs`; the press is then used up. */

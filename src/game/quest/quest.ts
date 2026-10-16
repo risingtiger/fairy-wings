@@ -45,7 +45,7 @@ export const QUEST = {
   /**
    * The grown-up's word. Nothing on screen asks for it: a grown-up types it on the keyboard once
    * they've heard her say a letter's sound (the letter she's tapped), and again once she has swiped
-   * across the word and read it out.
+   * across the word and read it out. On a touch screen they tap the top middle instead (see grownUpOk).
    */
   grownUpWord: 'ok',
   /**
@@ -162,6 +162,8 @@ export class ReadingQuest {
   /** Seconds until the elf's next hop for joy. */
   private hopIn = 0;
   private opened: ClueThing | null = null;
+  /** The grown-up tapped "ok" since the last step. */
+  private okTapped = false;
   private readonly startX: number;
   private readonly signZone = { left: 0, right: 0, bottom: 0 };
   private readonly view: QuestView = { x: 0, y: 0, width: 1920, height: 1080, wallX: -Infinity };
@@ -225,15 +227,22 @@ export class ReadingQuest {
     this.player.hurtBy(t.x);
   }
 
+  /** The grown-up's "ok", tapped on a touch screen (a hidden button at the top middle): counts like typing it, at the next step. */
+  grownUpOk(): void { this.okTapped = true; }
+
   /**
-   * Call first each step, before she moves: listens for the grown-up's word (typed on the keyboard; its
-   * K would otherwise also cast a spell). While she reads, it counts for the sound she's on or the word
-   * (see ReadAlong.confirm); typed when there's nothing to count, it's thrown away.
+   * Call first each step, before she moves: listens for the grown-up's word (typed on the keyboard, its
+   * K would otherwise also cast a spell; or tapped, see grownUpOk). While she reads, it counts for the
+   * sound she's on or the word (see ReadAlong.confirm); given when there's nothing to count, it's thrown away.
    */
   listen(input: Input<Action>, now: number): void {
-    if (this.phase !== 'read' || !input.typed(QUEST.grownUpWord, this.confirmSince)) return;
-    input.take('cast', now, 1000);
-    input.forgetTyped(); // used up: the next check needs it typed afresh
+    const tapped = this.okTapped;
+    this.okTapped = false;
+    if (this.phase !== 'read') return;
+    if (input.typed(QUEST.grownUpWord, this.confirmSince)) {
+      input.take('cast', now, 1000);
+      input.forgetTyped(); // used up: the next check needs it typed afresh
+    } else if (!tapped) return;
     const what = this.reader.confirm();
     if (what === 'sound') this.soundSaid();
     else if (what === 'word') this.wordRead();

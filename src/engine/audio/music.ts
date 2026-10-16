@@ -43,7 +43,7 @@ export class MusicPlayer {
   private started = false;
   private allowed = navigator.userActivation?.hasBeenActive ?? false;
 
-  constructor(private readonly mixer: Mixer, private readonly urls: readonly string[], private readonly volume = 1, private readonly crossfade = 2) {
+  constructor(private readonly mixer: Mixer, readonly urls: readonly string[], private readonly volume = 1, private readonly crossfade = 2) {
     this.ducker = new GainNode(mixer.ctx);
     this.ducker.connect(mixer.music);
     mixer.music.gain.value = volume;

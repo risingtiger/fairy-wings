@@ -11,7 +11,8 @@
     "sounds": "node tools/audio/cut-sounds.mjs tools/audio/sounds.config.json",
     "music": "node tools/audio/fetch-music.mjs tools/audio/music.config.json",
     "sprites": "node tools/sprites/align-sheet.mjs tools/sprites/fairy.config.json && node tools/sprites/pack-sheet.mjs tools/sprites/wings.config.json && node tools/sprites/pack-sheet.mjs tools/sprites/wings-purple.config.json && node tools/sprites/pack-sheet.mjs tools/sprites/star.config.json && npm run lowres",
-    "lowres": "node tools/sprites/make-low.mjs"
+    "lowres": "node tools/sprites/make-low.mjs",
+    "icons": "node tools/sprites/make-icons.mjs"
   },
   "dependencies": {
     "lit-html": "3.3.3"

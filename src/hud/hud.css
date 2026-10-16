@@ -7,6 +7,11 @@
   --key: rgba(255, 255, 255, 0.16);
   --accent: #ffb3ef;
   --font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  /* clear of the iPad's status bar (full screen from the home screen) and home bar */
+  --top: env(safe-area-inset-top, 0px);
+  --bottom: env(safe-area-inset-bottom, 0px);
+  --left: env(safe-area-inset-left, 0px);
+  --right: env(safe-area-inset-right, 0px);
 }
 
 html, body {
@@ -19,6 +24,9 @@ html, body {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  /* no rubber-banding or double-tap zooming */
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 #game {
@@ -60,7 +68,7 @@ html, body {
   font: 600 13px/1.4 var(--font);
 }
 .toggle {
-  top: 16px;
+  top: calc(16px + var(--top));
   display: flex;
   align-items: center;
   gap: 6px;
@@ -85,12 +93,12 @@ html, body {
 .toggle:hover, .collapse:hover { background: rgba(84, 44, 140, 0.9); }
 
 /* the controls (top left) */
-.help { top: 16px; left: 16px; max-width: min(340px, calc(100vw - 64px)); }
+.help { top: calc(16px + var(--top)); left: 16px; max-width: min(340px, calc(100vw - 64px)); }
 .help ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .help li { display: grid; grid-template-columns: 96px 1fr; align-items: center; }
 
 /* the grown-ups' panel (top right): picking the sentence */
-.grown-ups { top: 16px; right: 16px; width: min(320px, calc(100vw - 64px)); pointer-events: auto; }
+.grown-ups { top: calc(16px + var(--top)); right: 16px; width: min(320px, calc(100vw - 64px)); pointer-events: auto; }
 .grown-ups h1 { margin-bottom: 10px; }
 .grown-ups label { display: grid; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .grown-ups select {
@@ -107,7 +115,7 @@ html, body {
 .grown-ups p b { color: var(--accent); }
 .grown-ups kbd { margin-right: 2px; }
 
-.debug { top: 60px; right: 16px; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.debug { top: calc(60px + var(--top)); right: 16px; font-variant-numeric: tabular-nums; font-size: 12.5px; }
 
 kbd {
   display: inline-block;
@@ -168,7 +176,7 @@ kbd {
 
 /* the reading quest: the stars earned so far */
 .stars {
-  top: 14px;
+  top: calc(14px + var(--top));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -186,3 +194,119 @@ kbd {
 }
 .stars span.on { background: linear-gradient(#fff6c2, #ffc23f 70%, #f39a1d); transform: scale(1.06); }
 @media (max-width: 520px) { .stars span { width: 20px; height: 20px; } .stars { gap: 3px; padding: 5px 9px; } }
+
+/* --- touch screens (body.touch) ----------------------------------------------------- */
+
+/* the stats sit at the bottom middle, between the stick and the buttons */
+body.touch .debug { top: auto; right: auto; bottom: calc(14px + var(--bottom)); left: 50%; transform: translateX(-50%); }
+
+/* the wings badge moves up under the stars, out of the stick's way; the grown-ups' sound switches */
+body.touch .ability { top: calc(62px + var(--top)); bottom: auto; left: 50%; transform: translateX(-50%); }
+.switches { display: flex; gap: 8px; margin-top: 12px; }
+.switches button {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font: 600 14px/1.3 var(--font);
+}
+.switches button:disabled { opacity: 0.5; }
+.help .pad-icon { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--key); border: 2px solid var(--ring, rgba(255, 255, 255, 0.5)); }
+.help .pad-icon svg { width: 18px; height: 18px; }
+
+/* the grown-up's "ok": an invisible strip along the very top middle, over the stars */
+.grown-up-ok {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  height: calc(64px + var(--top));
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* held upright, the screen is too narrow to play: ask for it sideways */
+.rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch .rotate { display: grid; position: absolute; inset: 0; place-items: center; background: rgba(30, 12, 60, 0.75); pointer-events: auto; }
+}
+.rotate .card { display: grid; justify-items: center; gap: 18px; font-size: 18px; font-weight: 700; text-align: center; }
+.rotate .device { width: 46px; height: 66px; border: 4px solid var(--text); border-radius: 9px; animation: turn 2.4s ease-in-out infinite; }
+@keyframes turn { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+
+/* the on-screen controls (see TouchPad): a floating stick for the left thumb, buttons for the right */
+.touch-pad { position: fixed; inset: 0; pointer-events: none; transition: opacity 300ms, visibility 0s; }
+.touch-pad.off { opacity: 0; visibility: hidden; transition: opacity 300ms, visibility 0s 300ms; }
+.touch-pad svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.touch-pad svg .fill, .help .pad-icon svg .fill { fill: currentColor; stroke: none; }
+.help .pad-icon svg { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* wherever the left thumb lands in here, the stick comes to it; it waits, faint, where thumbs rest */
+.stick-zone { position: absolute; left: 0; bottom: 0; width: 46%; height: 64%; pointer-events: auto; touch-action: none; }
+.stick {
+  position: absolute;
+  left: calc(140px + var(--left));
+  top: calc(100% - 140px - var(--bottom));
+  width: 136px;
+  height: 136px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(44, 22, 84, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 18px rgba(255, 179, 239, 0.35), inset 0 0 18px rgba(255, 179, 239, 0.25);
+  opacity: 0.5;
+  transition: left 250ms, top 250ms, opacity 250ms;
+}
+.stick.active { opacity: 1; transition: opacity 120ms; }
+.knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 66px;
+  height: 66px;
+  margin: -33px 0 0 -33px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 35%, #fff, #ffd2f4 45%, #c78cff 100%);
+  box-shadow: 0 2px 10px rgba(60, 20, 100, 0.45), 0 0 14px rgba(255, 190, 245, 0.7);
+}
+.stick:not(.active) .knob { transition: transform 200ms; }
+
+/* the buttons: jump the biggest, in the corner, with the others in an arc around it */
+.pad-button {
+  --size: 80px;
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 3px solid var(--ring);
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.28), rgba(44, 22, 84, 0.5) 70%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(40, 10, 70, 0.35), 0 0 12px var(--glow);
+  pointer-events: auto;
+  touch-action: none;
+  transition: transform 90ms, background 90ms;
+}
+.pad-button svg { width: 52%; height: 52%; filter: drop-shadow(0 1px 2px rgba(40, 10, 70, 0.6)); }
+.pad-button.wings svg { width: 70%; height: 70%; }
+.pad-button.pressed { transform: scale(0.9); background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.6), var(--glow) 75%); }
+.pad-button[hidden] { display: none; }
+.pad-button.jump { --size: 104px; right: calc(32px + var(--right)); bottom: calc(32px + var(--bottom)); }
+.pad-button.catch { right: calc(158px + var(--right)); bottom: calc(44px + var(--bottom)); }
+.pad-button.magic { --size: 64px; right: calc(134px + var(--right)); bottom: calc(134px + var(--bottom)); }
+.pad-button.wand { right: calc(44px + var(--right)); bottom: calc(158px + var(--bottom)); }
+.pad-button.wings { --size: 60px; right: calc(236px + var(--right)); bottom: calc(146px + var(--bottom)); }
+.pad-button.jump, .pad-icon.jump { --ring: #ff9fe6; --glow: rgba(255, 140, 225, 0.55); }
+.pad-button.catch, .pad-icon.catch { --ring: #ffd36e; --glow: rgba(255, 205, 90, 0.5); }
+.pad-button.wand, .pad-icon.wand { --ring: #c9a2ff; --glow: rgba(190, 140, 255, 0.5); }
+.pad-button.magic, .pad-icon.magic { --ring: #9fd8ff; --glow: rgba(140, 205, 255, 0.5); }
+.pad-button.wings, .pad-icon.wings { --ring: #e8b8ff; --glow: rgba(225, 170, 255, 0.5); }

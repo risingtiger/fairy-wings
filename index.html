@@ -2,12 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Fairy Sidescroller</title>
-    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- added to the home screen it's an app of its own: full screen with no browser bars, and offline
+         (see src/sw.js). iPadOS keeps its status bar (clock, battery); the game draws on under it. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Fairy Wings" />
+    <meta name="theme-color" content="#1e94fb" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <title>Fairy Wings</title>
   </head>
   <body>
     <canvas id="game"></canvas>
+    <div id="touch"></div>
     <div id="hud"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
