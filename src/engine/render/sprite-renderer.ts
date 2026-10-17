@@ -38,7 +38,7 @@ export class Quad {
   }
 }
 
-/** A texture ready to draw. It can be swapped in place for another resolution of the same image (see Loader.setTier). */
+/** A texture ready to draw. */
 export interface TextureBinding {
   texture: Texture;
   bindGroup: GPUBindGroup;

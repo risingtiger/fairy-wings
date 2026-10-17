@@ -15,8 +15,8 @@ export interface HudState {
   playerState: string;
   playerX: number;
   playerY: number;
-  /** The art tier and drawing-buffer size, e.g. "low · 1554×1080". */
-  quality: string;
+  /** The drawing-buffer size, e.g. "2360×1640". */
+  resolution: string;
   /** Selected wings ('' until she finds some). */
   wingName: string;
   wingsWorn: boolean;
@@ -50,7 +50,7 @@ export interface SentenceOption { id: string; text: string; hint: string }
 export class Hud {
   private readonly state: HudState = {
     status: 'loading', message: '', showHelp: false, showDebug: false,
-    fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0, quality: '',
+    fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0, resolution: '',
     wingName: '', wingsWorn: false, flight: -1,
     stars: 0, starGoal: 0, muted: false, musicOff: false,
     showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false, touch: false,
@@ -214,7 +214,7 @@ export class Hud {
     return html`<section class="panel debug">
       <div><b>${s.fps.toFixed(0)}</b> fps · ${s.cpuMs.toFixed(2)} ms cpu</div>
       <div>${s.quads} quads · ${s.draws} draws · ${s.particles} particles</div>
-      <div>${s.quality}</div>
+      <div>${s.resolution}</div>
       <div>${s.playerState} · x ${s.playerX.toFixed(0)} · height ${Math.max(0, -s.playerY).toFixed(0)}</div>
     </section>`;
   }

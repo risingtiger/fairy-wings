@@ -8,7 +8,6 @@ import { Input } from './engine/input/input';
 import { Pointer } from './engine/input/pointer';
 import { TouchPad } from './engine/input/touch-pad';
 import { Loader } from './engine/render/loader';
-import { chooseTier, QUALITY, SlowFrameWatch } from './engine/render/quality';
 import { SpriteRenderer } from './engine/render/sprite-renderer';
 import { loadAssets } from './game/assets';
 import { MUSIC } from './game/config/audio';
@@ -19,8 +18,8 @@ import { SENTENCES, sentenceById } from './game/reading/words';
 import { MEADOW } from './game/world/level';
 import { Hud } from './hud/hud';
 
-/** What's remembered per browser: the sound switches, the sentence a grown-up picked last time, and the art quality. */
-const KEYS = { muted: 'sidescroller.muted', musicOff: 'sidescroller.musicOff', sentence: 'sidescroller.sentence', quality: 'sidescroller.quality' } as const;
+/** What's remembered per browser: the sound switches, and the sentence a grown-up picked last time. */
+const KEYS = { muted: 'sidescroller.muted', musicOff: 'sidescroller.musicOff', sentence: 'sidescroller.sentence' } as const;
 
 async function main(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>('#game')!;
@@ -36,15 +35,12 @@ async function main(): Promise<void> {
 
   const gpu = await initGpu(canvas, (message) => hud.update({ status: 'error', message: `The graphics device was lost (${message}). Reload the page to continue.` }));
   const { device, context } = gpu;
-  // full-size art, or half-size art drawn at no more than 1080p on older iPads and modest GPUs (see chooseTier)
-  const { tier, guessed } = chooseTier(KEYS.quality);
   const canvasSize = new CanvasSize(canvas, device.limits.maxTextureDimension2D);
-  canvasSize.maxHeight = QUALITY[tier].maxHeight;
 
   // music is a nice-to-have: if its playlist won't load, the game runs without it
   const musicLoading = MusicPlayer.load(mixer, MUSIC.manifest, MUSIC.volume, MUSIC.crossfade).catch((error: unknown) => { console.warn('No music:', error); return null; });
   const renderer = await SpriteRenderer.create(gpu);
-  const loader = new Loader(device, renderer, tier);
+  const loader = new Loader(device, renderer);
   const level = MEADOW;
   const input = new Input(window, ACTIONS, BINDINGS);
   const pad = touch ? new TouchPad(document.querySelector<HTMLElement>('#touch')!, input, TOUCH) : null;
@@ -94,20 +90,12 @@ async function main(): Promise<void> {
   voice.onSpeakingChange((speaking) => music?.duck(speaking ? MUSIC.duck : 0, speaking ? MUSIC.duckIn : MUSIC.duckOut)); // music steps back while someone talks
   const pointer = new Pointer(canvas); // her finger (or the mouse), pointing her wand at the words
 
-  // a guessed high tier that can't keep up drops to low, and starts there from then on
-  const slowWatch = guessed && tier === 'high' ? new SlowFrameWatch(() => {
-    save(KEYS.quality, 'low');
-    canvasSize.maxHeight = QUALITY.low.maxHeight;
-    void loader.setTier('low');
-  }) : null;
-
   const colorAttachment: GPURenderPassColorAttachment = { view: undefined as unknown as GPUTextureView, clearValue: level.sky, loadOp: 'clear', storeOp: 'store' };
   const passDescriptor: GPURenderPassDescriptor = { colorAttachments: [colorAttachment] };
   let nextHudUpdate = 0;
 
   const loop = new GameLoop({
     frame(now) {
-      slowWatch?.frame(now);
       input.poll(now);
       if (input.take('help', now, 250)) hud.update({ showHelp: !hud.value.showHelp });
       if (input.take('debug', now, 250)) hud.update({ showDebug: !hud.value.showDebug });
@@ -139,7 +127,7 @@ async function main(): Promise<void> {
         hud.update({
           fps: loop.stats.fps, cpuMs: loop.stats.cpuMs,
           quads: renderer.stats.quads, draws: renderer.stats.draws, particles: game.effects.particles.count,
-          playerState: p.state, playerX: p.x, playerY: p.y, quality: `${loader.tier} · ${canvas.width}×${canvas.height}`,
+          playerState: p.state, playerX: p.x, playerY: p.y, resolution: `${canvas.width}×${canvas.height}`,
           sentenceLocked: !quest.canChangeSentence,
         });
       }
