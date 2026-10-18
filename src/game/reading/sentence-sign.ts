@@ -28,8 +28,20 @@ const SIGN = {
   /** Space between letters, and between words. */
   letterGap: 0.3,
   wordGap: 0.85,
-  /** The sentence never takes more than this share of the screen's width: a long one, or a narrow screen, gets smaller letters. */
+  /**
+   * The sentence never takes more than this share of the screen's width. One too long for that wraps
+   * onto another line (up to `maxLines`, each line balanced against the others), so long as its
+   * letters would otherwise shrink below `wrapBelow` of their full height; past that, the letters shrink.
+   * However many lines, they're never taller all together than `tallest` lines of full-size letters
+   * (so they stay clear of her), and another line has to make the letters `wrapGain` times bigger.
+   */
   fitWidth: 0.86,
+  wrapBelow: 0.85,
+  maxLines: 3,
+  tallest: 2,
+  wrapGain: 1.1,
+  /** From one line's middle to the next's. */
+  lineGap: 1.65,
   /** A finger counts as on a letter this far above its middle, and this far below (more, so her finger needn't hide it). */
   hitAbove: 0.9,
   hitBelow: 1.25,
@@ -66,7 +78,7 @@ const BURST: Spray = {
  * The sentence, pinned near the top of the screen (screen space: x across from the screen's centre,
  * y down from it), so it stays put however the camera moves. The elf tosses the whole of it up at
  * once: its letters fly out of his hand one after another and line up, centred, sized to fit the
- * screen. Then it's for reading: the letter she taps can glow gold, the word she's on is
+ * screen (a long sentence wraps onto two lines, or three on a narrow screen). Then it's for reading: the letter she taps can glow gold, the word she's on is
  * underlined (with a hint to swipe across it once its sounds are done), a letter she has said pops,
  * a word she swipes across shimmers and fizzes, and a word read hops along, letter by letter. At the
  * end the whole sentence hops word by word.
@@ -74,7 +86,7 @@ const BURST: Spray = {
 export class SentenceSign {
   /** The letters' height now (units): as tall as they're allowed, or less to fit the screen. */
   letterHeight: number;
-  /** The middle of the letters, screen y. */
+  /** The middle of the letters (of the top line, when it wraps), screen y. */
   y: number;
   /** Its own sparkles, in screen space like the sentence. */
   private readonly fx = new ParticleSystem(1600);
@@ -83,6 +95,7 @@ export class SentenceSign {
   /** Per letter: its middle (letter heights from the sentence's middle), its word, how gold it is, and seconds since it popped. */
   private readonly unitX: number[] = [];
   private readonly wordOfLetter: number[] = [];
+  private glyphW: number[] = [];
   private lit = new Float32Array(0);
   private popAge = new Float32Array(0);
   /**
@@ -94,8 +107,16 @@ export class SentenceSign {
   private readonly leftU: number[] = [];
   private readonly rightU: number[] = [];
   private readonly lowU: number[] = [];
+  /** Per word: how wide it is, and the line it's on (0 the top). */
+  private readonly wordU: number[] = [];
+  private readonly lineOfWord: number[] = [];
   private exciteAge = new Float32Array(0);
-  private widthU = 0;
+  /** The lines it's laid out on, the widest of them and its ends (letter heights from the middle), and the room it was laid out for (units). */
+  private lines = 1;
+  private widestU = 0;
+  private minU = 0;
+  private maxU = 0;
+  private laidOutFor = -1;
   private readonly rng = new Rng(31);
   /** The letter lit this step, the word underlined, and whether it shows the swipe hint. */
   private litLetter = -1;
@@ -138,9 +159,11 @@ export class SentenceSign {
   /** It's been tossed up (and the sentence can't change any more). */
   get tossed(): boolean { return this.up; }
   /** Its edges: left and right of the letters, and their bottom (screen units). */
-  get left(): number { return this.leftU[0] * this.letterHeight; }
-  get right(): number { return this.rightU[this.rightU.length - 1] * this.letterHeight; }
-  get bottom(): number { return this.y + this.letterHeight * Math.max(0.5, ...this.lowU); }
+  get left(): number { return this.minU * this.letterHeight; }
+  get right(): number { return this.maxU * this.letterHeight; }
+  get bottom(): number { return this.lastLineY + this.letterHeight * Math.max(0.5, ...this.lowU); }
+  /** The middle of its bottom line of letters, screen y (the same as `y` for a sentence on one line). */
+  get lastLineY(): number { return this.lineY(this.lines - 1); }
   get wordCount(): number { return this.words.length; }
   /** Every letter has flown out of his hand and settled into place. */
   get settled(): boolean { return this.up && this.sinceTossed >= SIGN.stagger * (this.unitX.length - 1) + SIGN.flight + 0.25; }
@@ -152,6 +175,11 @@ export class SentenceSign {
   letterX(letter: number): number { return this.unitX[letter] * this.letterHeight; }
   /** The middle of a word, screen x. */
   wordMiddle(word: number): number { return ((this.leftU[word] + this.rightU[word]) / 2) * this.letterHeight; }
+  /** The middle of a line of letters, screen y. */
+  lineY(line: number): number { return this.y + line * SIGN.lineGap * this.letterHeight; }
+  /** The middle of the line a word is on, screen y. */
+  wordY(word: number): number { return this.lineY(this.lineOfWord[word]); }
+  private letterY(letter: number): number { return this.wordY(this.wordOfLetter[letter]); }
 
   /** Where a letter is right now (it bobs about its place): the middle of its body, screen space. */
   letterPoint(letter: number, out: Vec): Vec {
@@ -161,15 +189,31 @@ export class SentenceSign {
     return out;
   }
 
-  /** The letter at (x, y) on the screen, or -1. Between two letters it's the nearer; it's generous below them, for small fingers. */
+  /**
+   * The letter at (x, y) on the screen, or -1. Between two letters it's the nearer; it's generous below
+   * them, for small fingers.
+   */
   letterAt(x: number, y: number): number {
     const H = this.letterHeight, n = this.unitX.length;
-    if (!this.shown || !n || y < this.y - SIGN.hitAbove * H || y > this.y + SIGN.hitBelow * H) return -1;
+    if (!this.shown || !n) return -1;
+    // between two lines, the one whose reach (more below its letters than above) she's nearer the middle of
+    const reachMiddle = (l: number) => this.lineY(l) + ((SIGN.hitBelow - SIGN.hitAbove) / 2) * H;
+    let line = -1;
+    for (let l = 0; l < this.lines; l++) {
+      const ly = this.lineY(l);
+      if (y < ly - SIGN.hitAbove * H || y > ly + SIGN.hitBelow * H) continue;
+      if (line < 0 || Math.abs(y - reachMiddle(l)) < Math.abs(y - reachMiddle(line))) line = l;
+    }
+    if (line < 0) return -1;
     const u = x / H;
-    if (u < this.unitX[0] - SIGN.hitEnds || u > this.unitX[n - 1] + SIGN.hitEnds) return -1;
-    let best = 0;
-    for (let i = 1; i < n; i++) if (Math.abs(this.unitX[i] - u) < Math.abs(this.unitX[best] - u)) best = i;
-    return best;
+    let best = -1, first = -1, last = -1;
+    for (let i = 0; i < n; i++) {
+      if (this.lineOfWord[this.wordOfLetter[i]] !== line) continue;
+      if (first < 0) first = i;
+      last = i;
+      if (best < 0 || Math.abs(this.unitX[i] - u) < Math.abs(this.unitX[best] - u)) best = i;
+    }
+    return u < this.unitX[first] - SIGN.hitEnds || u > this.unitX[last] + SIGN.hitEnds ? -1 : best;
   }
 
   /** Lays the sentence out (none of it showing yet). */
@@ -178,24 +222,19 @@ export class SentenceSign {
     this.up = this.shown = false;
     this.cheering = this.litLetter = this.focused = -1;
     this.hinting = false;
-    this.unitX.length = this.wordOfLetter.length = this.firstOf.length = this.lastOf.length = this.leftU.length = this.rightU.length = this.lowU.length = 0;
-    const widths = words.flatMap((word) => [...word].map(glyphWidth)), count = widths.length;
-    this.widthU = widths.reduce((sum, w) => sum + w, 0) + SIGN.letterGap * (count - words.length) + SIGN.wordGap * (words.length - 1);
-    let cursor = -this.widthU / 2, n = 0;
+    this.wordOfLetter.length = this.firstOf.length = this.lastOf.length = this.lowU.length = this.wordU.length = 0;
+    const widths = (this.glyphW = words.flatMap((word) => [...word].map(glyphWidth))), count = widths.length;
+    let n = 0;
     words.forEach((word, w) => {
-      if (w) cursor += SIGN.wordGap;
       this.firstOf.push(n);
-      this.leftU.push(cursor);
-      for (let i = 0; i < word.length; i++, n++) {
-        if (i) cursor += SIGN.letterGap;
-        this.unitX.push(cursor + widths[n] / 2);
-        this.wordOfLetter.push(w);
-        cursor += widths[n];
-      }
+      let width = SIGN.letterGap * (word.length - 1);
+      for (let i = 0; i < word.length; i++, n++) { width += widths[n]; this.wordOfLetter.push(w); }
       this.lastOf.push(n - 1);
-      this.rightU.push(cursor);
+      this.wordU.push(width);
       this.lowU.push(Math.max(...[...word].map(glyphBottom)));
     });
+    this.layOut(this.breaks(1));
+    this.laidOutFor = -1;
     this.lit = new Float32Array(count);
     this.popAge = new Float32Array(count).fill(99);
     this.exciteAge = new Float32Array(words.length).fill(99);
@@ -225,7 +264,7 @@ export class SentenceSign {
 
   /** Underlines the word she's reading (-1: none), with the hint to swipe across it while `hint` is on. */
   focus(word: number, hint = false): void {
-    if (word >= 0 && this.focused < 0) { this.focusL.reset(this.leftU[word]); this.focusR.reset(this.rightU[word]); this.focusLow.reset(this.lowU[word]); }
+    if (word >= 0 && (this.focused < 0 || this.lineOfWord[word] !== this.lineOfWord[this.focused])) { this.focusL.reset(this.leftU[word]); this.focusR.reset(this.rightU[word]); this.focusLow.reset(this.lowU[word]); }
     this.focused = word;
     this.hinting = hint && word >= 0;
     if (!this.hinting) this.hintTime = 0;
@@ -235,23 +274,23 @@ export class SentenceSign {
   said(letter: number): void {
     this.popAge[letter] = 0;
     this.letters[letter].flash = 1;
-    this.burst(this.letterX(letter), this.y, 0.3);
+    this.burst(this.letterX(letter), this.letterY(letter), 0.3);
   }
 
   /** A swipe passes over a letter: it pops up a little. */
   touch(letter: number): void {
     this.popAge[letter] = 0;
     this.letters[letter].flash = Math.max(this.letters[letter].flash, 0.6);
-    this.fx.spray(this.letterX(letter), this.y, GLINT, 1, 3);
+    this.fx.spray(this.letterX(letter), this.letterY(letter), GLINT, 1, 3);
   }
 
   /** She swiped across a word: it shimmers, a flash of light sweeps over it, and it fizzes with sparkles. */
   excite(word: number): void {
     this.exciteAge[word] = 0;
     for (let n = this.firstOf[word]; n <= this.lastOf[word]; n++) this.letters[n].flash = 1;
-    const H = this.letterHeight, x = this.wordMiddle(word);
-    this.fx.ring(x, this.y, 30, (this.rightU[word] - this.leftU[word] + 1.5) * H, 0.5, rgba(255, 214, 90, 0.8), 0.07);
-    this.fx.spray(x, this.y, FIZZ, 1, 10);
+    const H = this.letterHeight, x = this.wordMiddle(word), y = this.wordY(word);
+    this.fx.ring(x, y, 30, (this.rightU[word] - this.leftU[word] + 1.5) * H, 0.5, rgba(255, 214, 90, 0.8), 0.07);
+    this.fx.spray(x, y, FIZZ, 1, 10);
   }
 
   /** The word read: it lights up and its letters hop along, one by one and then all together. */
@@ -259,7 +298,7 @@ export class SentenceSign {
     this.cheering = word;
     this.sinceCheered = 0;
     for (let n = this.firstOf[word]; n <= this.lastOf[word]; n++) this.letters[n].flash = 1;
-    this.burst(this.wordMiddle(word), this.y, 1);
+    this.burst(this.wordMiddle(word), this.wordY(word), 1);
   }
 
   /** The whole sentence: each word hops in turn, as it's read out, then all of them together, with bursts of light. */
@@ -267,11 +306,89 @@ export class SentenceSign {
     this.cheering = ALL;
     this.sinceCheered = 0;
     for (let n = 0; n < this.unitX.length; n++) this.letters[n].flash = 1;
-    this.burst(0, this.y, 1);
+    this.burst(0, (this.y + this.lastLineY) / 2, 1);
   }
 
   /** The letters swirl apart and fade away. */
   hide(): void { this.shown = false; }
+
+  /**
+   * Where each line starts (the index of its first word), for `lines` lines: the breaks that make the
+   * widest line narrowest. Sentences are short, so every way of breaking it is tried.
+   */
+  private breaks(lines: number): number[] {
+    const count = this.wordU.length;
+    let best: number[] = [0], bestWidest = Infinity;
+    const tryFrom = (starts: number[]) => {
+      if (starts.length === lines) {
+        const widest = Math.max(...starts.map((from, l) => this.lineWidth(from, l + 1 < lines ? starts[l + 1] : count)));
+        if (widest < bestWidest) { bestWidest = widest; best = [...starts]; }
+        return;
+      }
+      for (let from = starts[starts.length - 1] + 1; from <= count - (lines - starts.length); from++) tryFrom([...starts, from]);
+    };
+    tryFrom([0]);
+    return best;
+  }
+
+  /** The width (letter heights) of words `from` up to (not including) `to`, side by side on a line. */
+  private lineWidth(from: number, to: number): number {
+    let width = SIGN.wordGap * (to - from - 1);
+    for (let w = from; w < to; w++) width += this.wordU[w];
+    return width;
+  }
+
+  /** Places the words on lines starting at `starts` (see breaks), each line centred. */
+  private layOut(starts: readonly number[]): void {
+    const count = this.wordU.length, widths = this.glyphW;
+    this.unitX.length = this.leftU.length = this.rightU.length = this.lineOfWord.length = 0;
+    this.lines = starts.length;
+    this.widestU = 0;
+    this.minU = Infinity; this.maxU = -Infinity;
+    starts.forEach((from, line) => {
+      const to = line + 1 < starts.length ? starts[line + 1] : count, width = this.lineWidth(from, to);
+      this.widestU = Math.max(this.widestU, width);
+      let cursor = -width / 2;
+      this.minU = Math.min(this.minU, cursor);
+      for (let w = from; w < to; w++) {
+        if (w > from) cursor += SIGN.wordGap;
+        this.lineOfWord.push(line);
+        this.leftU.push(cursor);
+        for (let n = this.firstOf[w]; n <= this.lastOf[w]; n++) {
+          if (n > this.firstOf[w]) cursor += SIGN.letterGap;
+          this.unitX.push(cursor + widths[n] / 2);
+          cursor += widths[n];
+        }
+        this.rightU.push(cursor);
+      }
+      this.maxU = Math.max(this.maxU, cursor);
+    });
+  }
+
+  /** The tallest its letters can be (units) on this many lines, keeping them all within SIGN.tallest. */
+  private tallestFor(lines: number): number {
+    return (this.maxHeight * (1 + (SIGN.tallest - 1) * SIGN.lineGap)) / (1 + (lines - 1) * SIGN.lineGap);
+  }
+
+  /** How tall its letters can be (units), laid out as it is, in `room` units across. */
+  private heightFor(room: number): number {
+    return Math.min(this.maxHeight, room / this.widestU, this.tallestFor(this.lines));
+  }
+
+  /** Lays the sentence out for `room` units across: on one line if it fits big enough, or else wrapped onto the fewest lines that do. */
+  private fit(room: number): void {
+    if (room === this.laidOutFor) return;
+    this.laidOutFor = room;
+    const most = Math.min(SIGN.maxLines, this.wordU.length);
+    let pick: number[] = [0], pickHeight = 0;
+    for (let lines = 1; lines <= most; lines++) {
+      const starts = this.breaks(lines), widest = Math.max(...starts.map((from, l) => this.lineWidth(from, l + 1 < lines ? starts[l + 1] : this.wordU.length)));
+      const height = Math.min(this.maxHeight, room / widest, this.tallestFor(lines));
+      if (height > pickHeight * SIGN.wrapGain) { pick = starts; pickHeight = height; }
+      if (height >= this.maxHeight * SIGN.wrapBelow) break;
+    }
+    this.layOut(pick);
+  }
 
   /** One step; `viewWidth` is the screen's width in units (the sentence fits itself into it). */
   update(dt: number, viewWidth: number): void {
@@ -281,7 +398,8 @@ export class SentenceSign {
     this.fx.update(dt);
     this.presence = clamp(this.presence + (this.shown ? dt * 2 : -dt * 2.5), 0, 1);
     if (this.presence <= 0 || !this.up) return;
-    const H = (this.letterHeight = Math.min(this.maxHeight, (viewWidth * SIGN.fitWidth) / this.widthU));
+    this.fit(viewWidth * SIGN.fitWidth);
+    const H = (this.letterHeight = this.heightFor(viewWidth * SIGN.fitWidth));
     this.y = this.top + H / 2;
     this.updateFocus(dt);
     const t = this.sinceCheered, all = this.cheering === ALL, cheering = this.cheering !== -1;
@@ -291,12 +409,12 @@ export class SentenceSign {
     if (all) {
       for (let w = 0; w < this.words.length; w++) {
         const at = 0.35 + w * step;
-        if (t >= at && t - dt < at) this.burst(this.wordMiddle(w), this.y, 0.55);
+        if (t >= at && t - dt < at) this.burst(this.wordMiddle(w), this.wordY(w), 0.55);
       }
     }
     for (let w = 0; w < this.words.length; w++) this.exciteAge[w] += dt;
     for (let n = 0; n < this.unitX.length; n++) {
-      const w = this.wordOfLetter[n], i = n - this.firstOf[w], l = this.letters[n], sw = l.swarm, slotX = this.unitX[n] * H;
+      const w = this.wordOfLetter[n], i = n - this.firstOf[w], l = this.letters[n], sw = l.swarm, slotX = this.unitX[n] * H, slotY = this.wordY(w);
       this.popAge[n] += dt;
       this.lit[n] = clamp(this.lit[n] + (n === this.litLetter ? dt * 6 : -dt * 2.5), 0, 1);
       if (!this.shown) {
@@ -312,9 +430,9 @@ export class SentenceSign {
       if (u < 1) {
         // up out of his hand on an arc, growing and swirling into shape on the way
         const e = smooth(u), k = 1 - e, f = this.from;
-        const cx = lerp(f.x, slotX, 0.5), cy = Math.min(f.y, this.y) - SIGN.arc;
+        const cx = lerp(f.x, slotX, 0.5), cy = Math.min(f.y, slotY) - SIGN.arc;
         sw.anchorX = k * k * f.x + 2 * k * e * cx + e * e * slotX;
-        sw.anchorY = k * k * f.y + 2 * k * e * cy + e * e * this.y;
+        sw.anchorY = k * k * f.y + 2 * k * e * cy + e * e * slotY;
         sw.scale = lerp(SIGN.startScale, H, e);
         sw.form = smooth(clamp((u - 0.3) / 0.7, 0, 1));
         sw.cloudRadius = lerp(26, H * 0.55, u);
@@ -339,7 +457,7 @@ export class SentenceSign {
       l.highlight = Math.max(lit, ex * 0.8, pop < 1 ? (1 - pop) * 0.5 : 0);
       sw.anchorX = slotX + ex * Math.sin(this.time * 23 + n * 2) * H * 0.04;
       // the lit letter stands a little taller and bobs gently, so it stays easy to read
-      sw.anchorY = this.y + Math.sin(this.time * 2 + n * 1.3) * 4 - hop * H * 0.46 - lit * (0.5 + 0.5 * Math.sin(this.time * 3.5)) * H * 0.05;
+      sw.anchorY = slotY + Math.sin(this.time * 2 + n * 1.3) * 4 - hop * H * 0.46 - lit * (0.5 + 0.5 * Math.sin(this.time * 3.5)) * H * 0.05;
       sw.scale = H * (1 + lit * (0.08 + 0.02 * Math.sin(this.time * 3 + n)) + ex * 0.08 * (1 + shimmer));
       sw.tilt = ex * Math.sin(this.time * 16 + n * 1.7) * 0.14;
       sw.form = 1;
@@ -381,7 +499,8 @@ export class SentenceSign {
    * along it from the first letter to the last: swipe this way.
    */
   private drawFocus(r: SpriteRenderer, a: number): void {
-    const H = this.letterHeight, L = this.focusL.value * H, R = this.focusR.value * H, x = (L + R) / 2, w = R - L, lineY = this.y + H * this.focusLow.value + 18; // below any tails
+    const H = this.letterHeight, L = this.focusL.value * H, R = this.focusR.value * H, x = (L + R) / 2, w = R - L, wordY = this.wordY(this.focused);
+    const lineY = wordY + H * this.focusLow.value + 18; // below any tails
     r.shape(Shape.Box, x, lineY, w + 16, 20, rgba(48, 18, 92, 0.6 * a), Blend.Alpha, 0.4);
     r.shape(Shape.Box, x, lineY, w, 8, rgba(255, 226, 250, 0.75 * a), Blend.Alpha, 0.35);
     r.shape(Shape.Glow, x, lineY, w * 1.15, 36, rgba(255, 200, 245, 0.3 * a), Blend.Additive, 0.6);
@@ -390,7 +509,7 @@ export class SentenceSign {
     const u = (this.hintTime / SIGN.hintEvery) % 1, run = smooth(clamp(u / 0.75, 0, 1)), fade = Math.sin(clamp(u / 0.75, 0, 1) * Math.PI);
     const startX = this.letterX(this.firstOf[this.focused]);
     // a ring blooming on the first letter as each run begins: start here
-    if (u < 0.35) r.shape(Shape.Ring, startX, this.y, H * (0.9 + u * 2.5), H * (0.9 + u * 2.5), rgba(255, 240, 255, 0.7 * (1 - u / 0.35) * h), Blend.Alpha, 0.06);
+    if (u < 0.35) r.shape(Shape.Ring, startX, wordY, H * (0.9 + u * 2.5), H * (0.9 + u * 2.5), rgba(255, 240, 255, 0.7 * (1 - u / 0.35) * h), Blend.Alpha, 0.06);
     const headX = lerp(startX, R + H * 0.35, run);
     for (let k = 0; k < 5; k++) {
       const tx = headX - k * H * 0.18, size = (46 - k * 7) * fade * h;
@@ -416,12 +535,12 @@ export class SentenceSign {
   /** A swiped word: a warm glow over it, and a flash of light sweeping across it left to right. */
   private drawExcited(r: SpriteRenderer, word: number): void {
     const H = this.letterHeight, age = this.exciteAge[word], ex = 1 - age / SIGN.exciteFor;
-    const L = this.leftU[word] * H, R = this.rightU[word] * H, x = (L + R) / 2;
-    r.shape(Shape.Glow, x, this.y, R - L + H * 1.6, H * 1.9, rgba(255, 196, 70, 0.35 * ex * ex), Blend.Alpha, 0.2);
+    const L = this.leftU[word] * H, R = this.rightU[word] * H, x = (L + R) / 2, y = this.wordY(word);
+    r.shape(Shape.Glow, x, y, R - L + H * 1.6, H * 1.9, rgba(255, 196, 70, 0.35 * ex * ex), Blend.Alpha, 0.2);
     if (age < SIGN.sweepFor) {
       const u = age / SIGN.sweepFor, sx = lerp(L - H * 0.4, R + H * 0.4, smooth(u)), a = Math.sin(u * Math.PI);
-      r.shape(Shape.Glow, sx, this.y, H * 0.9, H * 1.7, rgba(255, 250, 225, 0.8 * a), Blend.Additive, 0.5);
-      r.shape(Shape.Sparkle, sx, this.y - H * 0.2, H * 0.9 * a, H * 0.9 * a, rgba(255, 255, 255, 0.9), Blend.Additive, 0, age * 8);
+      r.shape(Shape.Glow, sx, y, H * 0.9, H * 1.7, rgba(255, 250, 225, 0.8 * a), Blend.Additive, 0.5);
+      r.shape(Shape.Sparkle, sx, y - H * 0.2, H * 0.9 * a, H * 0.9 * a, rgba(255, 255, 255, 0.9), Blend.Additive, 0, age * 8);
     }
   }
 
@@ -440,21 +559,21 @@ export class SentenceSign {
    * no edge: dense in the middle, thinning into swirling puffs and pink wisps. It swells in as it appears.
    */
   private drawCloud(r: SpriteRenderer, a: number): void {
-    const t = this.time, grow = 0.75 + 0.25 * a, L = this.left, R = this.right, mx = (L + R) / 2;
-    const rx = ((R - L) / 2 + CLOUD.padX) * grow, ry = (this.letterHeight / 2 + CLOUD.padY) * grow;
-    r.shape(Shape.Glow, mx, this.y + 4, rx * 2.1, ry * 2.3, rgba(48, 18, 92, 0.7 * a), Blend.Alpha, -1.4); // the dense heart, with no edge at all
+    const t = this.time, grow = 0.75 + 0.25 * a, L = this.left, R = this.right, mx = (L + R) / 2, my = (this.y + this.lastLineY) / 2;
+    const rx = ((R - L) / 2 + CLOUD.padX) * grow, ry = ((this.lastLineY - this.y + this.letterHeight) / 2 + CLOUD.padY) * grow;
+    r.shape(Shape.Glow, mx, my + 4, rx * 2.1, ry * 2.3, rgba(48, 18, 92, 0.7 * a), Blend.Alpha, -1.4); // the dense heart, with no edge at all
     // puffs drawn out along the way they swirl; the inner ones turn faster, so the cloud winds into soft arms
     for (let i = 0; i < CLOUD.puffs; i++) {
       const d = this.puffR[i], ang = this.puffA[i] + (t * CLOUD.spin * TAU) / (0.35 + d), c = Math.cos(ang), sn = Math.sin(ang);
       const size = ry * (0.9 + 0.5 * (1 - d)) * this.puffSize[i], tone = this.puffTone[i];
-      r.shape(Shape.Glow, mx + c * d * rx, this.y + sn * d * ry, size * (1.4 + d), size * 0.7,
+      r.shape(Shape.Glow, mx + c * d * rx, my + sn * d * ry, size * (1.4 + d), size * 0.7,
         tone < 0.75 ? rgba(58, 24, 104, (0.2 + 0.12 * tone) * (1 - 0.5 * d) * a) : rgba(130, 70, 190, 0.16 * (1 - 0.4 * d) * a), // a few lighter violet ones for depth
         Blend.Alpha, 0.3, Math.atan2(c * ry, -sn * rx));
     }
     // pink wisps and specks drifting round the edge
     for (let i = 0; i < CLOUD.wisps; i++) {
       const ang = (i / CLOUD.wisps) * TAU + t * 0.22 + Math.sin(t * 0.7 + i) * 0.25, out = 0.95 + 0.12 * Math.sin(t * 1.3 + i * 2.1);
-      const c = Math.cos(ang), sn = Math.sin(ang), wx = mx + c * rx * out, wy = this.y + sn * ry * out, tw = 0.5 + 0.5 * Math.sin(t * 2.3 + i * 1.7);
+      const c = Math.cos(ang), sn = Math.sin(ang), wx = mx + c * rx * out, wy = my + sn * ry * out, tw = 0.5 + 0.5 * Math.sin(t * 2.3 + i * 1.7);
       r.shape(Shape.Glow, wx, wy, 120, 36, rgba(255, 160, 232, 0.2 * a), Blend.Alpha, 0.4, Math.atan2(c * ry, -sn * rx));
       r.shape(Shape.Sparkle, wx + Math.sin(t * 0.9 + i) * 14, wy + Math.cos(t * 1.1 + i) * 10, 10 + 16 * tw, 10 + 16 * tw, rgba(255, 228, 250, 0.6 * tw * a), Blend.Additive);
     }

@@ -37,6 +37,13 @@ export class VoiceCues {
     voice.onLineEnd((line) => set(line.speaker, false));
   }
 
+  /** A grown-up skipped what the elf is saying: he stops mid-line, and the quest moves on. */
+  skip(): void {
+    if (!this.quest.talking) return;
+    this.voice.stop();
+    this.quest.skipTalk();
+  }
+
   /** Call after the quest's update. */
   update(): void {
     const quest = this.quest, entered = quest.phase !== this.lastPhase;

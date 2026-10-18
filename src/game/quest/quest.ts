@@ -121,6 +121,17 @@ const ELF_MOVES: ReadonlySet<Phase> = new Set(['lead', 'seek', 'opening', 'wings
 /** Phases in which she stands still by the elf, reading (the keyboard is the grown-up's, for typing "ok"). */
 const READING: ReadonlySet<Phase> = new Set(['toss', 'read', 'wordCheer', 'allWords', 'party', 'letsGo']);
 
+/**
+ * Phases in which the elf is talking (see VoiceCues), and how far into each his talking is over: a
+ * grown-up can skip to there (see skipTalk).
+ */
+const TALKING: Partial<Record<Phase, number>> = {
+  hello: QUEST.helloFor,
+  allWords: QUEST.allWordsFor + QUEST.partyAfter,
+  letsGo: QUEST.letsGoFor,
+  wingsTalk: QUEST.wingsTalkFor,
+};
+
 /** Leading her to the wings: running on ahead, waiting for her, running back to fetch her, or waving her on. */
 type Lead = 'run' | 'wait' | 'fetch' | 'beckon';
 
@@ -196,6 +207,16 @@ export class ReadingQuest {
   get canChangeSentence(): boolean { return !this.sign.tossed; }
   /** Seconds since the current phase began (for timing things to it, like the voice-overs). */
   get inPhase(): number { return this.phaseTime; }
+  /** The elf is talking (his hello, or another of his lines), and it can be skipped (see skipTalk). */
+  get talking(): boolean { return this.phase in TALKING; }
+
+  /** A grown-up skipped what the elf is saying: on to what comes after it, at the next step. Stop his voice too (see VoiceCues.skip). */
+  skipTalk(): void {
+    const over = TALKING[this.phase];
+    if (over === undefined) return;
+    this.phaseTime = Math.max(this.phaseTime, over);
+    if (this.phase === 'hello') this.elf.wave(QUEST.waveAfterHello);
+  }
 
   /** Picks the sentence to read; only before it goes up (see canChangeSentence). */
   chooseSentence(sentence: Sentence): boolean {
@@ -417,7 +438,7 @@ export class ReadingQuest {
   private aimWand(dt: number, aim: Readonly<Aim> | null): void {
     this.reader.update(aim);
     const p = this.player, v = this.view, sign = this.sign, target = this.reader.target, at = target ?? aim;
-    const raised = target !== null || (aim !== null && (aim.pressed || aim.y < sign.y + QUEST.wandReach * sign.letterHeight));
+    const raised = target !== null || (aim !== null && (aim.pressed || aim.y < sign.lastLineY + QUEST.wandReach * sign.letterHeight));
     p.pointAt = raised && at ? v.x + at.x : null;
     const tip = p.wandTip('cast', this.tip);
     this.stream.update(dt, tip.x - v.x, tip.y - v.y, target);

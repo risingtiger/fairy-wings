@@ -38,6 +38,8 @@ export interface HudState {
   sentenceLocked: boolean;
   /** Played by touch (an iPad): on-screen controls, a hidden "ok" for the grown-up, sound switches in their panel. */
   touch: boolean;
+  /** The elf is talking: a button skips what he's saying. */
+  talking: boolean;
 }
 
 /** A sentence in the grown-ups' list: its words, and what the wings hide in. */
@@ -53,7 +55,7 @@ export class Hud {
     fps: 0, cpuMs: 0, quads: 0, draws: 0, particles: 0, playerState: '', playerX: 0, playerY: 0, resolution: '',
     wingName: '', wingsWorn: false, flight: -1,
     stars: 0, starGoal: 0, muted: false, musicOff: false,
-    showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false, touch: false,
+    showGrownUps: false, sentences: [], sentenceId: '', sentenceLocked: false, touch: false, talking: false,
   };
   /** A grown-up picked a different sentence. */
   onSentence: ((id: string) => void) | null = null;
@@ -62,6 +64,8 @@ export class Hud {
   /** The grown-up switched all sound, or just the music, on or off (touch screens; the keyboard has M and N). */
   onSound: (() => void) | null = null;
   onMusic: (() => void) | null = null;
+  /** The grown-up skipped what the elf is saying. */
+  onSkip: (() => void) | null = null;
   private scheduled = false;
   private readonly toggleHelp = () => this.update({ showHelp: !this.state.showHelp });
   private readonly toggleGrownUps = () => this.update({ showGrownUps: !this.state.showGrownUps });
@@ -77,6 +81,7 @@ export class Hud {
   private readonly ok = (e: Event) => { e.preventDefault(); this.onOk?.(); };
   private readonly sound = () => this.onSound?.();
   private readonly music = () => this.onMusic?.();
+  private readonly skip = () => this.onSkip?.();
   private readonly stats = () => this.update({ showDebug: !this.state.showDebug });
 
   constructor(private readonly root: HTMLElement) { this.flush(); }
@@ -112,6 +117,7 @@ export class Hud {
     return html`
       ${s.showHelp ? this.help(s) : this.toggle('left', html`<kbd>?</kbd> Controls`, this.toggleHelp)}
       ${s.showGrownUps ? this.grownUps(s) : this.toggle('right', 'Grown-ups', this.toggleGrownUps)}
+      ${s.talking && !s.showGrownUps ? this.skipButton(s) : nothing}
       ${s.showDebug ? this.debug(s) : nothing}
       ${s.wingName ? this.wingBadge(s) : nothing}
       ${this.starRow(s.stars, s.starGoal)}
@@ -126,6 +132,13 @@ export class Hud {
   private toggle(side: 'left' | 'right', label: unknown, onClick: () => void) {
     return html`<button class="toggle ${side}" tabindex="-1" aria-expanded="false" @mousedown=${this.keepFocus} @click=${onClick}>
       ${label} <span class="chevron">▾</span>
+    </button>`;
+  }
+
+  /** Under the grown-ups' button while the elf talks: skips what he's saying. */
+  private skipButton(s: HudState) {
+    return html`<button class="toggle right skip" tabindex="-1" @mousedown=${this.keepFocus} @click=${this.skip}>
+      Skip talking <span class="chevron">▸▸</span>${s.touch ? nothing : html` <kbd>Enter</kbd>`}
     </button>`;
   }
 
@@ -178,7 +191,7 @@ export class Hud {
           ${s.sentences.map((o) => html`<option value=${o.id} ?selected=${o.id === s.sentenceId}>${o.text}</option>`)}
         </select>
       </label>
-      ${picked ? html`<p><b>The wings hide in:</b> ${picked.hint}.</p>` : nothing}
+      ${picked ? html`<p><b>The wings hide in:</b> ${picked.hint}. Every other thing gets just one part of the sentence wrong, so she has to read every word.</p>` : nothing}
       <p class="muted">${s.sentenceLocked
         ? 'The sentence is up, so it\'s set for this game. Reload the page to start again with a different one.'
         : 'Pick it before the elf puts it up.'}</p>

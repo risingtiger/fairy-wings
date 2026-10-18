@@ -64,6 +64,9 @@ async function main(): Promise<void> {
   };
   hud.update({ starGoal: quest.starGoal, sentences: SENTENCES, sentenceId: quest.sentence.id });
   hud.onOk = () => quest.grownUpOk();
+  // the elf's talking can be skipped (a button while he talks, or Enter)
+  hud.onSkip = () => cues.skip();
+  addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.repeat) cues.skip(); });
 
   // M silences effects and music (the voice stays: it's how she follows the game); N switches just the music
   const music = await musicLoading;
@@ -120,6 +123,7 @@ async function main(): Promise<void> {
       // flight meter: every frame while it moves, so it drains smoothly (lit-html only touches the bar's style)
       const gauge = game.flightGauge;
       if (Math.abs(gauge - hud.value.flight) > 0.003 || (gauge === -1) !== (hud.value.flight === -1)) hud.update({ flight: gauge });
+      hud.update({ talking: quest.talking }); // re-renders only when it changes
 
       if (now >= nextHudUpdate) {
         nextHudUpdate = now + 250;

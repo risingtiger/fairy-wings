@@ -78,6 +78,8 @@ html, body {
 }
 .toggle.left { left: 16px; padding-left: 7px; }
 .toggle.right { right: 16px; }
+.toggle.skip { top: calc(60px + var(--top)); }
+.skip ~ .debug { top: calc(104px + var(--top)); }
 .toggle kbd { margin: 0; }
 .toggle .chevron { font-size: 11px; opacity: 0.8; }
 .collapse {
